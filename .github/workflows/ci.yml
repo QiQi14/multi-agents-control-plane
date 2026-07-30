@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The plane reads git history: a pinned-base A/B skips without it rather than passing
+          # vacuously, and the docs build stamps a commit for its staleness banner.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Confirm there is nothing to install
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Tests
+        run: python -m unittest discover -s scripts/tests -t .
+
+  gates:
+    name: plane gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: doctor
+        run: python scripts/ai_cli.py doctor
+
+      - name: docs lint
+        run: python scripts/ai_cli.py docs lint
+
+      - name: docs build
+        run: python scripts/ai_cli.py docs build
+
+      - name: sync is idempotent
+        shell: bash
+        run: |
+          python scripts/ai_cli.py sync
+          if ! git diff --quiet; then
+            echo "::error::ai sync changed tracked files. Commit the regenerated adapters."
+            git --no-pager diff --stat
+            exit 1
+          fi
+
+      - name: vendored asset matches its recorded provenance
+        run: |
+          python - <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          root = Path(".ai/templates/pr-blueprint/vendor/mermaid-11.16.0")
+          provenance = json.loads((root / "provenance.json").read_text(encoding="utf-8"))
+          actual = hashlib.sha256((root / "mermaid.min.js").read_bytes()).hexdigest()
+          if actual != provenance["asset_sha256"]:
+              sys.exit(f"vendored Mermaid hash mismatch: {actual} != {provenance['asset_sha256']}")
+          print("vendored asset intact")
+          PY
+
+  clean-install:
+    name: install into a fresh repository (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plane
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The claim is that this drops into any repository. Prove it on every push, in a repo the
+      # plane has never seen, rather than asserting it in a README.
+      - name: Create a target repository
+        shell: bash
+        run: |
+          mkdir -p target/src
+          cd target
+          git init -q
+          git config user.email ci@example.com
+          git config user.name CI
+          printf '# target\n' > README.md
+          printf 'x = 1\n' > src/app.py
+          git add -A
+          git commit -qm "initial"
+
+      - name: Install
+        shell: bash
+        run: python plane/install.py target
+
+      - name: Set up and verify the installed plane
+        shell: bash
+        working-directory: target
+        run: |
+          python scripts/ai_cli.py init
+          python scripts/ai_cli.py sync
+          python scripts/ai_cli.py doctor
+          python scripts/ai_cli.py docs build
+          python scripts/ai_cli.py docs lint
+
+      - name: Uninstall leaves only the target's own files
+        shell: bash
+        run: |
+          python plane/install.py target --uninstall --include-generated
+          cd target
+          remaining=$(find . -path ./.git -prune -o -type f -print | sort)
+          expected=$'./README.md\n./src/app.py'
+          if [ "$remaining" != "$expected" ]; then
+            echo "::error::uninstall left files behind or removed the target's own files"
+            echo "$remaining"
+            exit 1
+          fi
+          echo "clean uninstall verified"

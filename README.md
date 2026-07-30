@@ -1,5 +1,9 @@
 # multi-agents-control-plane
 
+[![CI](https://github.com/QiQi14/multi-agents-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/QiQi14/multi-agents-control-plane/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://github.com/QiQi14/multi-agents-control-plane/actions/workflows/ci.yml)
+
 A context-agnostic control plane for running real software work across multiple AI coding agents.
 
 Most agent setups are a prompt file and hope. This is the other thing: a **task state machine with
@@ -7,8 +11,8 @@ contracts, receipts, risk gates, and evidence**, so that planning, execution, an
 separate roles with separate authority — and every claim an agent makes is backed by an artifact
 you can open, not by prose you have to trust.
 
-Drop it into any repository. Stdlib Python only. No services, no daemons, no system-level install,
-nothing written outside your repo.
+One command drops it into a repository. Stdlib Python only. No services, no daemons, no
+system-level install, and nothing written outside your repo.
 
 ---
 
@@ -17,6 +21,22 @@ nothing written outside your repo.
 This project is for repositories where multiple AI coding agents perform substantial, reviewable
 software work and prompts alone are no longer enough to control scope, authority, evidence, and
 approval.
+
+---
+
+## Status
+
+**v0.1.0 is the first public release.** The core was built and exercised across internal
+repositories before being extracted, and every gate below runs in CI, but the public CLI and the
+artifact schemas are pre-1.0 and may still change between minor versions.
+
+The core carries no language, stack, or vendor policy, and CI proves a clean install, setup and
+uninstall on Linux, macOS and Windows against Python 3.10-3.13. Compatibility beyond that is
+expanding during the pre-1.0 series; if it does not fit your repository, that is a bug worth
+reporting.
+
+Not in this release: the *Project Intelligence* screen in the reader, which needs a source-symbol
+indexer that does not ship yet. It reports itself unconfigured and nothing else depends on it.
 
 ---
 
@@ -218,7 +238,21 @@ Two ways in. They produce the same result — pick whichever suits how you work.
 
 ### Option A — run it yourself
 
-Copy this tree into your repository, then:
+Clone this repository next to your project, then install into it:
+
+```bash
+git clone https://github.com/QiQi14/multi-agents-control-plane
+```
+
+```bash
+python multi-agents-control-plane/install.py ../my-project
+```
+
+That copies `.ai/`, `scripts/`, `ai` and `ai.cmd` into the target and records a manifest of exactly
+what it placed. It refuses rather than overwriting anything already there, and `--dry-run` prints
+the plan without writing a byte, so you can look before committing to it.
+
+Then, in your project:
 
 ```bash
 python scripts/ai_cli.py init
@@ -244,7 +278,7 @@ python scripts/ai_cli.py feature new "Add retry handling to the payment worker"
 
 ### Option B — let an agent do it
 
-Copy this tree into your repository, open your coding agent there, and paste:
+Install as above, open your coding agent in the project, and paste:
 
 ```text
 This repo now contains a `.ai/` control plane. Please set it up, update project context and sync.
@@ -270,6 +304,56 @@ Review is deliberately a **separate session, ideally a different model**:
 ```text
 Review task <task_id>.
 ```
+
+---
+
+## Updating and removing
+
+Upgrading is the installer again with `--update`. It refreshes the plane and leaves your work alone:
+tasks, captured memory, and anything you edited stay as they are.
+
+```bash
+git -C multi-agents-control-plane pull
+```
+
+```bash
+python multi-agents-control-plane/install.py ../my-project --update
+```
+
+```bash
+cd ../my-project && python scripts/ai_cli.py sync && python scripts/ai_cli.py doctor
+```
+
+Removal is manifest-driven, so it can only take back what it gave:
+
+```bash
+python multi-agents-control-plane/install.py ../my-project --uninstall --include-generated
+```
+
+Files you edited since installing are **kept and reported**, never deleted. Add `--dry-run` to see
+exactly what would go first. CI proves on every push that a clean install followed by an uninstall
+leaves a repository holding only its own files.
+
+| Flag | Effect |
+| --- | --- |
+| `--dry-run` | Print the plan, write nothing |
+| `--update` | Refresh the plane, preserve tasks, memory and your edits |
+| `--force` | Overwrite conflicting files that are already there |
+| `--with-tests` | Also install the plane's own suite (several MB of render fixtures) |
+| `--uninstall` | Remove recorded, unmodified files |
+| `--include-generated` | With `--uninstall`, also remove generated adapters |
+
+### What lands in your repository
+
+```text
+.ai/          canonical control plane: rules, workflows, agents, config, templates, task scaffold
+scripts/      the plane itself
+ai, ai.cmd    launchers
+```
+
+`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.claude/` and `.agents/` are **not** installed — `ai sync`
+generates them from `.ai/`. If you already have a file at one of those paths, sync will replace it,
+and the installer warns you before that happens. Move anything hand-written into `.ai/` first.
 
 ---
 
@@ -301,7 +385,7 @@ Review task <task_id>.
 | `.ai/tasks/` | The task state machine |
 | `.ai/memory/` | Typed memory: decisions, lessons, gotchas, API surface, feature ledger, deprecations |
 | `.ai/config.yaml` | Tool roster, routing taxonomy, risk gates, isolation strategies, enabled extensions |
-| `scripts/` | The plane: `ai_cli.py`, the `ai_plane` package, extension registry, and 630 tests |
+| `scripts/` | The plane: `ai_cli.py`, the `ai_plane` package, extension registry, and its stdlib test suite |
 
 ---
 
