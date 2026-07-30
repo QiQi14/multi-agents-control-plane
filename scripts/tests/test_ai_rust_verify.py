@@ -16,6 +16,7 @@ from unittest import mock
 
 import scripts.ai_plane.config as config_module
 import scripts.ai_plane.doctor as doctor_module
+import scripts.ai_plane.tool_detection as tool_detection
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -133,15 +134,49 @@ class AiCliDoctorAndLauncherTests(unittest.TestCase):
             default_guidance,
         )
 
+    @staticmethod
+    def transports(status: str = "unknown"):
+        """A deterministic transport detector.
+
+        The real one probes the host. On a developer machine with a `codex:` URI handler registered
+        it reports `present` (PASS); on a clean CI runner it reports `absent` (WARN). Letting that
+        reach a fixture that asserts "every check passes" makes the result depend on whatever
+        happens to be installed on the machine running the tests.
+        """
+        def detect(supported_tools, _descriptors, **_kwargs):
+            return {
+                tool: (tool_detection.DetectionResult(status, "fixture", "fixture detector"),)
+                for tool in supported_tools
+            }
+        return detect
+
     def collect(self, **kwargs) -> list[dict[str, str]]:
-        params = {"root": self.root, "ai": self.ai, "lock_inspector": self.lock()}
+        params = {
+            "root": self.root,
+            "ai": self.ai,
+            "lock_inspector": self.lock(),
+            "transport_detector": self.transports(),
+        }
         params.update(kwargs)
         return ai_cli.collect_doctor_checks(**params)
 
     def test_doctor_pass_fixture_is_all_success(self) -> None:
         checks = self.collect()
-        self.assertEqual(set(), {check["status"] for check in checks} - {"PASS"})
+        # Name the offenders: the previous set-difference reported only that a WARN existed, which
+        # is why an environment-dependent check took several CI runs to identify.
+        offenders = sorted(
+            f"{check['name']}={check['status']}" for check in checks if check["status"] != "PASS"
+        )
+        self.assertEqual([], offenders, f"non-PASS checks: {offenders}")
         self.assertIn("Manifest", {check["name"] for check in checks})
+
+    def test_an_undetectable_tool_warns_without_failing(self) -> None:
+        # An absent transport is advisory, never a failure: detection is a hint, not authorization.
+        checks = self.collect(transport_detector=self.transports("absent"))
+        detection = [c for c in checks if c["name"].startswith("Tool detection")]
+        self.assertTrue(detection, "expected at least one tool-detection check")
+        self.assertTrue(all(c["status"] == "WARN" for c in detection))
+        self.assertFalse(any(c["status"] == "FAIL" for c in checks))
 
     def test_doctor_expected_gaps_exit_zero_with_exact_advice(self) -> None:
         (self.ai / "tasks" / "queue" / "task_fixture").rmdir()
