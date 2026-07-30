@@ -1,3 +1,11 @@
+# Every text file is LF in the working copy, on every platform.
+#
+# `.ai/_manifest.json` records a sha256 of each generated file's BYTES. If git hands Windows a CRLF
+# working copy and Linux an LF one, the same commit fails its own integrity check on one of them:
+# `doctor` reports wholesale drift and `sync` rewrites the tree. Pinning the working copy to LF
+# makes a generated file identical everywhere, which is what lets the manifest mean anything.
+* text=auto eol=lf
+
 # Hash-pinned vendored assets must survive git byte-for-byte.
 #
 # Their sha256 is recorded in the neighbouring provenance.json and verified before a report is
@@ -5,6 +13,10 @@
 # mermaid.min.js by 3,587 bytes -- so the integrity check fails on a fresh clone even though the
 # file was never edited. `-text` disables that conversion in both directions.
 **/vendor/** -text
+
+# Windows batch files keep CRLF. `ai.cmd` is shipped verbatim, never generated, so it is not
+# covered by the manifest and cannot desynchronise it.
+*.cmd text eol=crlf
 
 # Binary formats git must never touch.
 *.png binary

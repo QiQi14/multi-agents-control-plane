@@ -203,11 +203,16 @@ def write_generated_bytes(path: Path, content: bytes) -> None:
 
 
 def platform_text_bytes(content: str) -> bytes:
+    """Serialize generated text with LF endings on every platform.
+
+    These bytes are hashed into `.ai/_manifest.json`, so they must not depend on the machine that
+    produced them. Emitting `os.linesep` meant a repository generated on Windows failed its own
+    manifest check on Linux and vice versa: every generated file mismatched, `doctor` reported
+    wholesale drift, and `sync` rewrote the tree on the other platform. Git owns the working-copy
+    convention; the recorded bytes stay LF.
+    """
     normalized = content.replace("\r\n", "\n").replace("\r", "\n")
-    text = normalized.rstrip() + "\n"
-    if os.linesep != "\n":
-        text = text.replace("\n", os.linesep)
-    return text.encode("utf-8")
+    return (normalized.rstrip() + "\n").encode("utf-8")
 
 
 def write_generated(path: Path, content: str) -> None:
