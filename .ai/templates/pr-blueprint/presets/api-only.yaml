@@ -1,0 +1,16 @@
+name: api-only
+sections:
+  - metadata
+  - overview
+  - execution_summary
+  - file_inventory
+  - api
+  - websocket
+  - data_models
+  - validation
+  - architecture
+  - qa
+  - risks
+  - open_questions
+  - decisions
+  - notes

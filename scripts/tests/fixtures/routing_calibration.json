@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "zone": "mass_digest",
+      "winner_capabilities": [
+        "large_context_ingestion"
+      ],
+      "near_miss_missing": "large_context_ingestion"
+    },
+    {
+      "zone": "visual_design",
+      "winner_capabilities": [
+        "visual_iteration"
+      ],
+      "near_miss_missing": "visual_iteration"
+    },
+    {
+      "zone": "bounded_implementation",
+      "winner_capabilities": [
+        "bounded_patch_loop"
+      ],
+      "near_miss_missing": "bounded_patch_loop"
+    },
+    {
+      "zone": "horizontal_refactor",
+      "winner_capabilities": [
+        "multi_file_refactor",
+        "large_context_ingestion"
+      ],
+      "near_miss_missing": "large_context_ingestion"
+    },
+    {
+      "zone": "deep_logic",
+      "winner_capabilities": [
+        "deep_reasoning"
+      ],
+      "near_miss_missing": "deep_reasoning"
+    },
+    {
+      "zone": "research_diagnosis",
+      "winner_capabilities": [
+        "repository_research"
+      ],
+      "near_miss_missing": "repository_research"
+    },
+    {
+      "zone": "review",
+      "winner_capabilities": [
+        "independent_review"
+      ],
+      "near_miss_missing": "independent_review"
+    }
+  ]
+}

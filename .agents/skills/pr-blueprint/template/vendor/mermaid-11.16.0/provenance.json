@@ -1,0 +1,16 @@
+{
+  "asset_bytes": 3565102,
+  "asset_path": "dist/mermaid.min.js",
+  "asset_sha256": "74d7c46dabca328c2294733910a8aa1ed0c37451776e8d5295da38a2b758fb9b",
+  "license": "MIT",
+  "compatible_cli": {
+    "package": "@mermaid-js/mermaid-cli",
+    "registry_integrity": "sha512-0InK2nbVIMtzVzCugmdvPkAuvS6wRUqU6Utntff1n8c7lgfRZAdhKY6PSKvcIK9nFmuOUzAgB5+x/XWcroZ7Zg==",
+    "registry_tarball": "https://registry.npmjs.org/@mermaid-js/mermaid-cli/-/mermaid-cli-11.16.0.tgz",
+    "version": "11.16.0"
+  },
+  "package": "mermaid",
+  "registry_integrity": "sha512-Zvm3kbstgdpvIJPPItlL7fppIZ3kibvc1oZIGxdvk9t6UFz6flv+Jw7FtRGKwfcI8OckmH04LqG6LlS6X4B1pA==",
+  "registry_tarball": "https://registry.npmjs.org/mermaid/-/mermaid-11.16.0.tgz",
+  "version": "11.16.0"
+}

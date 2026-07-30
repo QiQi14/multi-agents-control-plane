@@ -1,0 +1,18 @@
+# Hash-pinned vendored assets must survive git byte-for-byte.
+#
+# Their sha256 is recorded in the neighbouring provenance.json and verified before a report is
+# allowed to use them. End-of-line conversion silently rewrites the bytes -- on Windows it inflated
+# mermaid.min.js by 3,587 bytes -- so the integrity check fails on a fresh clone even though the
+# file was never edited. `-text` disables that conversion in both directions.
+**/vendor/** -text
+
+# Binary formats git must never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

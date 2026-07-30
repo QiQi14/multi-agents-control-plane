@@ -1,0 +1,510 @@
+<!-- GENERATED FILE. DO NOT EDIT DIRECTLY. Edit the source spec and rebuild. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR Blueprint - No Diagram Report</title>
+  <style>/* PR Blueprint report.
+ *
+ * This file deliberately shares the control-plane reader's token vocabulary, type scale, spacing
+ * scale and category hues (reader_assets/production/app.css). A report and the reader are two
+ * views of the same repository and must read as one product; the previous stylesheet invented an
+ * unrelated palette and typography, so an exported report looked like a different tool.
+ *
+ * Local only: no remote font, no CDN, no network.
+ */
+
+/* ------------------------------------------------------------------ tokens */
+:root {
+  color-scheme: light dark;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-read: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --measure: 72ch;
+  --rail: 248px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --step--1: 12.5px;
+  --step-0: 14px;
+  --step-1: 16px;
+  --step-2: 20px;
+  --step-3: 26px;
+  --step-4: 34px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* category hues — identical to the reader so a colour means the same thing in both */
+  --h-rule: 356; --h-workflow: 222; --h-agent: 272; --h-project-doc: 189;
+  --h-decision: 33; --h-memory: 152; --h-migration: 16; --h-skill: 318; --h-spec: 92;
+  --h-high: 356; --h-medium: 33; --h-low: 152;
+}
+
+/* light */
+:root, :root[data-theme="light"] {
+  --canvas: hsl(40 22% 97%);
+  --surface: hsl(0 0% 100%);
+  --surface-2: hsl(40 20% 98%);
+  --surface-sunken: hsl(40 16% 94%);
+  --ink: hsl(222 22% 14%);
+  --ink-2: hsl(222 10% 36%);
+  --ink-3: hsl(222 8% 52%);
+  --line: hsl(222 14% 88%);
+  --line-strong: hsl(222 14% 78%);
+  --accent: hsl(222 72% 44%);
+  --accent-ink: hsl(222 72% 34%);
+  --accent-soft: hsl(222 78% 96%);
+  --focus: hsl(222 90% 46%);
+  --shadow: 0 1px 2px hsl(222 20% 20% / .06), 0 6px 18px -12px hsl(222 20% 20% / .3);
+  --chip-l: 34%; --chip-bg-l: 95%; --chip-bg-s: 70%;
+  --code-bg: hsl(222 26% 12%);
+  --code-ink: hsl(220 18% 90%);
+}
+
+/* dark */
+:root[data-theme="dark"] {
+  --canvas: hsl(224 20% 9%);
+  --surface: hsl(224 18% 13%);
+  --surface-2: hsl(224 16% 16%);
+  --surface-sunken: hsl(224 20% 11%);
+  --ink: hsl(220 20% 93%);
+  --ink-2: hsl(220 12% 72%);
+  --ink-3: hsl(220 10% 58%);
+  --line: hsl(224 14% 24%);
+  --line-strong: hsl(224 12% 34%);
+  --accent: hsl(214 92% 68%);
+  --accent-ink: hsl(214 92% 76%);
+  --accent-soft: hsl(214 60% 18%);
+  --focus: hsl(206 96% 62%);
+  --shadow: 0 1px 2px hsl(0 0% 0% / .4), 0 10px 26px -14px hsl(0 0% 0% / .8);
+  --chip-l: 76%; --chip-bg-l: 20%; --chip-bg-s: 42%;
+  --code-bg: hsl(224 24% 8%);
+  --code-ink: hsl(220 18% 90%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --canvas: hsl(224 20% 9%);
+    --surface: hsl(224 18% 13%);
+    --surface-2: hsl(224 16% 16%);
+    --surface-sunken: hsl(224 20% 11%);
+    --ink: hsl(220 20% 93%);
+    --ink-2: hsl(220 12% 72%);
+    --ink-3: hsl(220 10% 58%);
+    --line: hsl(224 14% 24%);
+    --line-strong: hsl(224 12% 34%);
+    --accent: hsl(214 92% 68%);
+    --accent-ink: hsl(214 92% 76%);
+    --accent-soft: hsl(214 60% 18%);
+    --focus: hsl(206 96% 62%);
+    --shadow: 0 1px 2px hsl(0 0% 0% / .4), 0 10px 26px -14px hsl(0 0% 0% / .8);
+    --chip-l: 76%; --chip-bg-l: 20%; --chip-bg-s: 42%;
+    --code-bg: hsl(224 24% 8%);
+    --code-ink: hsl(220 18% 90%);
+  }
+}
+
+/* --------------------------------------------------------------- structure */
+/* The layout mirrors the reader's document view exactly: a reading column with a sticky rail on
+ * the RIGHT, one centred measure, a breadcrumb, a horizontal meta strip, and unboxed sections.
+ * Sharing tokens was not enough -- a left card rail and a metadata dashboard still read as a
+ * different product. */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: var(--space-6) clamp(var(--space-4), 4vw, var(--space-7)) var(--space-7);
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.reader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: var(--space-6);
+  align-items: start;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.reader-main { min-width: 0; }
+
+.breadcrumb { font-size: var(--step--1); color: var(--ink-3); margin: 0 0 var(--space-3); }
+.breadcrumb .sep { margin: 0 6px; opacity: .5; }
+
+.doc-head { margin-bottom: var(--space-6); }
+
+.doc-head h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--step-4);
+  letter-spacing: -.025em;
+  line-height: 1.15;
+  font-weight: 650;
+}
+
+.doc-goal {
+  margin: 0 0 var(--space-4);
+  max-width: var(--measure);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+}
+
+.meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--step--1);
+}
+
+.meta-strip div { display: flex; gap: 6px; align-items: center; }
+.meta-strip dt { color: var(--ink-3); font-weight: 600; }
+.meta-strip dd { margin: 0; color: var(--ink-2); }
+
+/* -------------------------------------------------------------------- rail */
+.toc {
+  position: sticky;
+  top: var(--space-5);
+  align-self: start;
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  font-size: var(--step--1);
+}
+
+.toc h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--step--1);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.toc .toc-heading-2 { margin-top: var(--space-5); }
+
+.toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+
+.toc li a {
+  display: block;
+  padding: 3px 0 3px 10px;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--ink-2);
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.toc li a:hover { color: var(--ink); border-left-color: var(--line-strong); }
+.toc li a:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.kv {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px var(--space-4);
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.kv dt { color: var(--ink-3); font-weight: 600; }
+.kv dd { margin: 0; color: var(--ink-2); word-break: break-word; }
+
+/* ---------------------------------------------------------------- sections */
+/* Unboxed, like the reader's document flow: a rule under the heading, not a card per section. */
+.report-section { margin: 0 0 var(--space-7); }
+
+.report-section > h2 {
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--step-3);
+  line-height: 1.2;
+  letter-spacing: -.02em;
+  font-weight: 640;
+}
+
+.report-section h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--step-2); font-weight: 620; }
+.report-section h4 { margin: var(--space-4) 0 var(--space-2); font-size: var(--step-1); font-weight: 620; }
+.report-section h5 { margin: var(--space-3) 0 var(--space-2); font-size: var(--step-0); font-weight: 640; color: var(--ink-2); }
+
+/* Prose matches the reader's .prose exactly. */
+.report-section p,
+.report-section li {
+  font-family: var(--font-read);
+  font-size: 17px;
+  line-height: 1.72;
+  max-width: var(--measure);
+}
+
+.report-section p { margin: 0 0 1.05em; }
+.report-section ul, .report-section ol { margin: 0 0 1.05em; padding-left: var(--space-5); }
+.report-section li { margin-bottom: var(--space-1); }
+
+.report-section a { color: var(--accent-ink); text-underline-offset: 2px; }
+.report-section a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ----------------------------------------------------------------- tables */
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+table { border-collapse: collapse; width: 100%; font-size: var(--step-0); }
+
+th, td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+thead th {
+  background: var(--surface-sunken);
+  font-size: var(--step--1);
+  font-weight: 640;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:nth-child(even) { background: var(--surface-2); }
+
+/* ------------------------------------------------------------------- code */
+.code, pre {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--font-mono);
+  font-size: var(--step-0);
+  line-height: 1.5;
+}
+
+code { font-family: var(--font-mono); font-size: .94em; }
+
+:not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+/* -------------------------------------------------------- api / endpoints */
+.endpoint, .message, .model, .subblock {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.endpoint > h3, .message > h3, .model > h3 { margin-top: 0; }
+
+.method {
+  display: inline-block;
+  margin-right: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.method.get { --h: 189; }
+.method.post { --h: 152; }
+.method.put, .method.patch { --h: 33; }
+.method.delete { --h: 356; }
+.method.get, .method.post, .method.put, .method.patch, .method.delete {
+  background: hsl(var(--h) var(--chip-bg-s) var(--chip-bg-l));
+  color: hsl(var(--h) 60% var(--chip-l));
+}
+
+.response {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--line-strong);
+}
+
+.response > h5 { margin-top: 0; font-family: var(--font-mono); }
+
+/* --------------------------------------------------------------- evidence */
+.evidence-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-item {
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.evidence-item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--surface-sunken);
+}
+
+.evidence-item figcaption {
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-3);
+  word-break: break-all;
+}
+
+.missing-evidence {
+  padding: var(--space-3);
+  border: 1px dashed hsl(var(--h-medium) 60% var(--chip-l) / .5);
+  border-radius: var(--radius);
+  background: hsl(var(--h-medium) var(--chip-bg-s) var(--chip-bg-l));
+  color: hsl(var(--h-medium) 60% var(--chip-l));
+  font-size: var(--step-0);
+}
+
+/* -------------------------------------------------------------- callouts */
+.callout, .notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.callout p:last-child, .notice p:last-child { margin-bottom: 0; }
+
+.callout.warn, .notice.warn {
+  border-left-color: hsl(var(--h-medium) 60% var(--chip-l));
+  background: hsl(var(--h-medium) var(--chip-bg-s) var(--chip-bg-l));
+  color: hsl(var(--h-medium) 60% var(--chip-l));
+}
+
+.callout.risk, .notice.risk {
+  border-left-color: hsl(var(--h-high) 60% var(--chip-l));
+  background: hsl(var(--h-high) var(--chip-bg-s) var(--chip-bg-l));
+  color: hsl(var(--h-high) 60% var(--chip-l));
+}
+
+.callout.decision, .notice.decision {
+  border-left-color: hsl(var(--h-decision) 60% var(--chip-l));
+  background: hsl(var(--h-decision) var(--chip-bg-s) var(--chip-bg-l));
+  color: hsl(var(--h-decision) 60% var(--chip-l));
+}
+
+/* ------------------------------------------------------------- checklist */
+.checklist { list-style: none; padding-left: 0; }
+
+.checklist li {
+  position: relative;
+  padding-left: var(--space-6);
+  margin-bottom: var(--space-2);
+}
+
+.checklist li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .45em;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface);
+}
+
+/* -------------------------------------------------------------- diagrams */
+.diagram { margin: 0 0 var(--space-4); }
+
+.diagram-output {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow-x: auto;
+}
+
+.static-svg svg, .diagram-output svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+.diagram-state {
+  display: inline-block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-3);
+}
+
+.mermaid-source { margin-top: var(--space-2); }
+.mermaid-source summary { cursor: pointer; font-size: var(--step--1); color: var(--ink-3); }
+
+/* -------------------------------------------------------------- responsive */
+@media (max-width: 900px) {
+  .reader { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .toc { position: static; max-height: none; order: -1; }
+  .doc-head h1 { font-size: var(--step-3); }
+}
+
+@media print {
+  body { background: #fff; padding: 0; }
+  .toc { display: none; }
+  .reader { grid-template-columns: minmax(0, 1fr); }
+  .report-section { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+  <div class="reader">
+    <main class="reader-main">
+      <p class="breadcrumb"><span>PR Blueprint</span><span class="sep">/</span><span>No Diagram Report</span></p>
+      <header class="doc-head">
+        <h1>No Diagram Report</h1>
+        <p class="doc-goal">scripts/<wbr>tests/<wbr>fixtures/<wbr>pr-<wbr>blueprint/<wbr>no-<wbr>diagram.<wbr>spec.<wbr>md</p>
+        <dl class="meta-strip"><div><dt>Preset</dt><dd>frontend</dd></div><div><dt>Kind</dt><dd>app</dd></div><div><dt>Status</dt><dd>Draft</dd></div><div><dt>Source</dt><dd>scripts/tests/fixtures/pr-blueprint/no-diagram.spec.md</dd></div></dl>
+      </header>
+      <section id="overview" class="report-section"><h2>Overview</h2><p>This report intentionally has no architecture diagram.</p></section>
+<section id="qa" class="report-section"><h2>QA Checklist</h2><ul class="checklist"><li>Confirm the static report contains no Mermaid runtime.</li></ul></section>
+    </main>
+    <aside class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol><li class="lvl-2"><a href="#overview">Overview</a></li>
+<li class="lvl-2"><a href="#qa">QA Checklist</a></li></ol>
+      <h2 class="toc-heading-2">At a glance</h2>
+      <dl class="kv"><dt>Author</dt><dd>Codex</dd><dt>Reviewer</dt><dd>Claude</dd><dt>Platform</dt><dd>Web</dd><dt>Version</dt><dd>v1</dd></dl>
+    </aside>
+  </div>
+  
+</body>
+</html>

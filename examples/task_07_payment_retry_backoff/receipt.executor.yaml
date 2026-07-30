@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "receipt_id": "task_07_payment_retry_backoff-executor-1",
+  "task_id": "task_07_payment_retry_backoff",
+  "role": "executor",
+  "sequence": {
+    "attempt": 1
+  },
+  "actor": {
+    "name": "executor",
+    "tool": "codex",
+    "family": "codex",
+    "model": "bounded_execution",
+    "reasoning": "high"
+  },
+  "environment": {
+    "os": "Linux 6.8",
+    "arch": "x86_64",
+    "device": "ci-runner-04"
+  },
+  "revision": {
+    "base_commit": "3b4fbea0d10c1a28728bd21a0ac36b4eb0da7573",
+    "head_commit": "a91c07de4b2f8ee15c3a0d7b6e4419fca2d0b83e",
+    "diff": "4 files changed, 187 insertions(+), 62 deletions(-)"
+  },
+  "gates": [
+    {
+      "command": "pytest tests/workers/settlement -q",
+      "status": "pass",
+      "detail": "34 passed in 2.11s; both previously failing reproductions now pass"
+    },
+    {
+      "command": "python scripts/ai_cli.py verify task_07_payment_retry_backoff --plan",
+      "status": "pass",
+      "detail": "scope=affected; 0 target violations; 0 forbidden violations"
+    },
+    {
+      "command": "git diff --check",
+      "status": "pass",
+      "detail": "no whitespace errors"
+    }
+  ],
+  "evidence_refs": [
+    "attempt-timing-table",
+    "concurrency-single-authorization",
+    "dead-letter-payload"
+  ],
+  "context_items": [
+    {
+      "context_item_id": "t07-executor-clock-skew",
+      "kind": "finding",
+      "summary": "A backwards clock jump produced a negative delay in the first implementation, which collapsed the backoff to a tight loop -- the exact behaviour this task exists to remove. The delay is now computed from a monotonic source and clamped at the floor, and a regression test injects a backwards jump."
+    },
+    {
+      "context_item_id": "t07-executor-key-timeout",
+      "kind": "finding",
+      "summary": "The idempotency key was still being re-derived when an attempt timed out with no response body. That is the latent double-charge path from the brief. The key is now derived once at job pickup and carried through every attempt regardless of outcome."
+    },
+    {
+      "context_item_id": "t07-executor-scope-held",
+      "kind": "note",
+      "summary": "Dead-letter payload retention initially looked like it needed a ledger column. It did not: the payload is stored on the queue record, so src/ledger/** and migrations/** are byte-unchanged as the contract requires."
+    }
+  ],
+  "notes": [
+    "Attempt gaps observed under the fake clock: 0.5s, 1.1s, 2.3s, 4.4s, 8.9s, 16.2s -- strictly increasing, jitter non-zero on every gap, capped at 20s.",
+    "The 503 storm reproduction drops from 41,204 attempts to 6 for a single job.",
+    "Two workers on one job produce exactly one authorization across 500 randomized interleavings."
+  ]
+}

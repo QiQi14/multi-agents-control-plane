@@ -1,0 +1,64 @@
+multi-agents-control-plane
+Copyright 2026 multi-agents-control-plane contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--------------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+--------------------------------------------------------------------------------
+
+This distribution vendors the following third-party component. Its license
+applies to that component only, not to the rest of this work.
+
+Mermaid (mermaid.min.js), version 11.16.0
+    License: MIT
+    Copyright (c) 2014 - 2022 Knut Sveidqvist
+    Homepage: https://mermaid.js.org/
+    Vendored at:
+        .ai/templates/pr-blueprint/vendor/mermaid-11.16.0/
+    License text and pinned provenance (registry tarball, integrity hash, and
+    asset sha256) ship alongside the asset in that directory.
+
+    It is vendored so that generated reports render diagrams offline, with no
+    network access and no runtime CDN dependency.
+
+--------------------------------------------------------------------------------
+ACKNOWLEDGEMENTS
+--------------------------------------------------------------------------------
+
+The projects below contain no code in this distribution and impose no license
+obligation on it. They are recorded because their published design influenced
+this work, and because two pieces of terminology were adopted verbatim.
+
+CodeGraph -- https://github.com/ColbyMchenry/codegraph
+    MIT, Copyright (c) 2026 Colby Mchenry
+
+    Adopted as ideas and naming, not as code:
+      - "sufficient-or-silent" as the contract for any advisory output: give a
+        complete answer or stay quiet, never a partial one.
+      - `name_segment_vocab` as the name of the prose-to-identifier mapping in
+        the generated search index. The implementation here is our own.
+      - success-shaped errors: an expected condition returns guidance and a
+        zero exit status, reserving nonzero for genuine malfunction.
+      - staleness honesty: serve results with a "computed at <commit>" banner
+        rather than blocking or silently serving stale data.
+
+Spec Kit -- https://github.com/github/spec-kit
+    MIT, Copyright GitHub, Inc.
+
+    Adopted as ideas only, with no code and no shared naming:
+      - a declarative integration registry, so adding an agent is data rather
+        than new code.
+      - neutral command tokens in canonical sources, resolved per adapter.
+      - hash-tracked install manifests, so regeneration and uninstall touch
+        only files whose contents still match what was generated.

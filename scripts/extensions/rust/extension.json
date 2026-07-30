@@ -1,0 +1,30 @@
+{
+  "id": "rust",
+  "version": "1.0.0",
+  "api_version": 1,
+  "types": ["gate", "command"],
+  "root": "scripts",
+  "entrypoints": {
+    "gate": "rust_verify.py"
+  },
+  "scopes": [
+    "control-plane",
+    "affected",
+    "affected-plus-neighbors",
+    "workspace"
+  ],
+  "executables": ["cargo", "rustc"],
+  "commands": {
+    "cargo-metadata": {
+      "executable": "cargo",
+      "args": ["metadata", "--no-deps", "--format-version", "1"],
+      "inputs": ["project/Cargo.toml"],
+      "outputs": ["stdout: workspace metadata JSON"],
+      "timeout_seconds": 120
+    }
+  },
+  "read_roots": ["project", ".ai"],
+  "write_roots": [".ai/tasks", ".ai/project"],
+  "platforms": ["any"],
+  "priority": 100
+}

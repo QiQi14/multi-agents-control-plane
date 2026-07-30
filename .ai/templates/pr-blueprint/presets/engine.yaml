@@ -1,0 +1,17 @@
+name: engine
+sections:
+  - metadata
+  - overview
+  - execution_summary
+  - file_inventory
+  - data_models
+  - validation
+  - state_matrix
+  - ui_states
+  - architecture
+  - function_log
+  - qa
+  - risks
+  - open_questions
+  - decisions
+  - notes

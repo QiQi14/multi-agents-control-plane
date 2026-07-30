@@ -1,0 +1,38 @@
+{generated_warning}
+
+# Antigravity Agent Control Plane
+
+This is the generated Google Antigravity project prompt.
+
+Canonical source: `.ai/`.
+
+This file is intentionally generated at repository root so Antigravity sees the control-plane instructions without requiring a slash command. It is not a Gemini CLI user-memory file.
+
+## Operating Contract
+
+- Treat `.ai/` as source of truth.
+- Treat `GEMINI.md`, `.agents/rules/`, and `.agents/skills/` as generated Antigravity adapters.
+- Do not edit generated adapters directly. Update `.ai/` and run `ai sync`.
+- Do not create git worktrees unless the task explicitly selects `worktree`.
+- Use the stable current workspace by default.
+- If the user gives only a brief requirement, start with brief intake and planning instead of waiting for a prewritten workflow.
+- Choose tools by task shape, context need, reasoning depth, workspace stability, and review independence.
+- Produce receipts for execution and QA work.
+
+## Conditional Support
+
+- `.agents/rules/`: conditional rules Antigravity may load when the rule pattern matches.
+- `.agents/skills/`: optional skills and generators, including PR Blueprint.
+- The catalog below indexes project docs, agent roles, rules, workflows, and memory. Open the specific file when its summary matches the task instead of loading everything.
+
+# Control-Plane Catalog
+
+The sections below are a **catalog**, not inlined text. Each entry gives a title, a one-line summary, and a path under `.ai/`. When a summary is relevant to the current task, open that file with your own file tools (read/grep) — do not preload every file, and do not ask the user to paste them; they are all in this repository. This keeps the always-loaded prompt small so the token budget is spent on the few files a task actually needs.
+
+{catalog:agent_roles}
+{catalog:project_docs}
+{catalog:rules}
+{catalog:workflows}
+{catalog:memory}
+
+{command_catalog}

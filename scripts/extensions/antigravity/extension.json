@@ -1,0 +1,158 @@
+{
+  "id": "antigravity",
+  "version": "1.0.0",
+  "api_version": 1,
+  "types": [
+    "integration"
+  ],
+  "root": "scripts/extensions/antigravity",
+  "read_roots": [
+    ".ai"
+  ],
+  "write_roots": [
+    "GEMINI.md",
+    ".agents"
+  ],
+  "platforms": [
+    "any"
+  ],
+  "integration": {
+    "format": "antigravity",
+    "agent_document": null,
+    "command_catalog_source": ".ai/skills/pr-blueprint/command-catalog.json",
+    "catalogs": {
+      "agent_roles": {
+        "title": "Agent Roles",
+        "source_root": ".ai/agents",
+        "include": null,
+        "exclude": []
+      },
+      "project_docs": {
+        "title": "Project Docs",
+        "source_root": ".ai/project",
+        "include": null,
+        "exclude": []
+      },
+      "rules": {
+        "title": "Rules",
+        "source_root": ".ai/rules",
+        "include": null,
+        "exclude": []
+      },
+      "workflows": {
+        "title": "Workflows",
+        "source_root": ".ai/workflows",
+        "include": null,
+        "exclude": []
+      },
+      "memory": {
+        "title": "Memory",
+        "source_root": ".ai/memory",
+        "include": null,
+        "exclude": []
+      }
+    },
+    "argument_placeholder": "<task_id>",
+    "generated_file_extension": ".md",
+    "invoke_separator": " ",
+    "detect_marker": "GEMINI.md",
+    "commands": {
+      "ARCHIVE": "ai archive",
+      "AUDIT_FRAMEWORK": "ai audit-framework",
+      "BLUEPRINT": "ai blueprint",
+      "CARGO": "ai cargo",
+      "CARGO_CACHE": "ai cargo-cache",
+      "DISPATCH": "ai dispatch",
+      "DOCS": "ai docs",
+      "FEATURE": "ai feature",
+      "INIT": "ai init",
+      "LEARN": "ai learn",
+      "MERGE": "ai merge",
+      "PLAN": "ai plan",
+      "QA": "ai qa",
+      "RESEARCH": "ai research",
+      "REVIEW": "ai review",
+      "SKILLS": "ai skills",
+      "SKILLS_ADD": "ai skills add",
+      "SKILLS_LIST": "ai skills list",
+      "SKILLS_REMOVE": "ai skills remove",
+      "SYNC": "ai sync",
+      "TASK": "ai task",
+      "TASKS": "ai tasks",
+      "VERIFY": "ai verify"
+    },
+    "render": {
+      "artifacts": [
+        {
+          "kind": "rules_tree",
+          "source_root": ".ai/rules",
+          "destination": ".agents/rules",
+          "strip_frontmatter": true,
+          "legacy_aliases": [
+            {
+              "path": "execution-boundary.md",
+              "title": "Legacy Rule: execution-boundary.md",
+              "replacement": ".ai/rules/task-contracts.md",
+              "reason": "Execution boundaries now live in folder-based task contracts."
+            },
+            {
+              "path": "multi-agents-planning.md",
+              "title": "Legacy Rule: multi-agents-planning.md",
+              "replacement": ".ai/rules/task-contracts.md",
+              "reason": "Planning now uses explicit risk tiers, target files, and forbidden files."
+            },
+            {
+              "path": "qa-audit-protocol.md",
+              "title": "Legacy Rule: qa-audit-protocol.md",
+              "replacement": ".ai/rules/qa-gates.md",
+              "reason": "QA now reviews receipts, diff, contract, tests, and risk gates."
+            },
+            {
+              "path": "shared-state-and-persistence.md",
+              "title": "Legacy Rule: shared-state-and-persistence.md",
+              "replacement": ".ai/rules/control-plane.md",
+              "reason": "`.ai/` is canonical; root state files are deprecated."
+            }
+          ],
+          "rule_frontmatter": {
+            "template": "---\ntrigger: {activation}\ndescription: {description}\n---\n",
+            "default_activation": "always",
+            "activation_map": {
+              "always": "always_on",
+              "model_decision": "model_decision",
+              "glob": "glob",
+              "manual": "manual"
+            }
+          }
+        },
+        {
+          "kind": "rules_tree",
+          "source_root": ".ai/workflows",
+          "destination": ".agents/workflows",
+          "strip_frontmatter": true,
+          "legacy_aliases": []
+        },
+        {
+          "kind": "skills_tree",
+          "source_root": ".ai/skills",
+          "destination": ".agents/skills",
+          "transform": "generated_tree",
+          "index": {
+            "path": ".agents/skills/index.md",
+            "template": "templates/skills-index.md.tmpl",
+            "entry_glob": "*/SKILL.md",
+            "entry_template": "- `{skill_name}`: `{skill_source}`",
+            "blueprint_entry_template": null
+          },
+          "blueprint_source": ".ai/templates/pr-blueprint",
+          "blueprint_destination": ".agents/skills/pr-blueprint/template"
+        },
+        {
+          "kind": "marker_document",
+          "path": "GEMINI.md",
+          "template": "templates/GEMINI.md.tmpl"
+        }
+      ]
+    }
+  }
+}

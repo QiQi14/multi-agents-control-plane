@@ -1,0 +1,8 @@
+{
+  "_generated_warning": "<!-- GENERATED FROM .ai/. DO NOT EDIT DIRECTLY. Run `ai sync`. -->",
+  "agent_control_plane": {
+    "canonical_root": ".ai",
+    "default_role": "reasoning_and_review_agent",
+    "default_isolation": "patch_review"
+  }
+}

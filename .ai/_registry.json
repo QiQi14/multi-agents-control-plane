@@ -1,0 +1,565 @@
+{
+  "corpora": [
+    {
+      "id": "control-plane",
+      "path_root": ".ai/"
+    },
+    {
+      "id": "product",
+      "path_root": "project/docs/"
+    }
+  ],
+  "documents": [
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "agent-executor",
+      "owner": "system",
+      "path": ".ai/agents/executor.md",
+      "relations": [
+        {
+          "target": "rule-task-contracts",
+          "type": "depends_on"
+        },
+        {
+          "target": "workflow-execution",
+          "type": "depends_on"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Agent Role: Executor",
+      "type": "agent"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "agent-planner",
+      "owner": "system",
+      "path": ".ai/agents/planner.md",
+      "relations": [
+        {
+          "target": "workflow-planning",
+          "type": "depends_on"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Agent Role: Planner",
+      "type": "agent",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "agent-reviewer",
+      "owner": "system",
+      "path": ".ai/agents/reviewer.md",
+      "relations": [
+        {
+          "target": "workflow-review",
+          "type": "depends_on"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Agent Role: Reviewer",
+      "type": "agent"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "agent-strategist",
+      "owner": "system",
+      "path": ".ai/agents/strategist.md",
+      "relations": [
+        {
+          "target": "workflow-research",
+          "type": "depends_on"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Agent Role: Strategist",
+      "type": "agent"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "project-adapter-design",
+      "owner": "system",
+      "path": ".ai/project/adapter-design.md",
+      "relations": [
+        {
+          "target": "rule-control-plane",
+          "type": "relates_to"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Adapter Design",
+      "type": "project-doc"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "project-architecture",
+      "owner": "system",
+      "path": ".ai/project/architecture.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Architecture",
+      "type": "project-doc",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "project-commands",
+      "owner": "system",
+      "path": ".ai/project/commands.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Commands",
+      "type": "project-doc",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "created": "2026-07-24",
+      "domain": "control-plane",
+      "id": "project-doc-schema",
+      "owner": "system",
+      "path": ".ai/project/doc-schema.md",
+      "relations": [
+        {
+          "target": "project-principles",
+          "type": "relates_to"
+        },
+        {
+          "target": "project-architecture",
+          "type": "relates_to"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "tags": [
+        "schema",
+        "documentation",
+        "frontmatter",
+        "registry"
+      ],
+      "title": "Documentation Metadata & Relation Schema",
+      "type": "project-doc",
+      "updated": "2026-07-29"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "project-infrastructure",
+      "owner": "system",
+      "path": ".ai/project/infrastructure.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Infrastructure",
+      "type": "project-doc"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "project-overview",
+      "owner": "system",
+      "path": ".ai/project/overview.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Project Overview",
+      "type": "project-doc"
+    },
+    {
+      "corpus": "control-plane",
+      "created": "2026-07-24",
+      "domain": "control-plane",
+      "id": "project-principles",
+      "owner": "system",
+      "path": ".ai/project/principles.md",
+      "relations": [
+        {
+          "target": "rule-control-plane",
+          "type": "relates_to"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "tags": [
+        "principles",
+        "governance",
+        "control-plane",
+        "semver"
+      ],
+      "title": "Control Plane Governed Principles",
+      "type": "project-doc",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "created": "2026-07-26",
+      "domain": "control-plane",
+      "id": "project-routing-taxonomy",
+      "owner": "system",
+      "path": ".ai/project/routing-taxonomy.md",
+      "relations": [
+        {
+          "target": "project-principles",
+          "type": "relates_to"
+        },
+        {
+          "target": "rule-task-contracts",
+          "type": "relates_to"
+        },
+        {
+          "target": "workflow-planning",
+          "type": "informs"
+        },
+        {
+          "target": "agent-planner",
+          "type": "informs"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "tags": [
+        "routing",
+        "taxonomy",
+        "capabilities",
+        "profiles",
+        "governance"
+      ],
+      "title": "Routing Taxonomy and Execution Profiles",
+      "type": "project-doc",
+      "updated": "2026-07-27"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "project-task-evidence-schema",
+      "owner": "system",
+      "path": ".ai/project/task-evidence-schema.md",
+      "relations": [
+        {
+          "target": "rule-task-contracts",
+          "type": "enforced_by"
+        },
+        {
+          "target": "rule-qa-gates",
+          "type": "enforced_by"
+        },
+        {
+          "target": "workflow-execution",
+          "type": "referenced_by"
+        },
+        {
+          "target": "workflow-qa",
+          "type": "referenced_by"
+        },
+        {
+          "target": "workflow-learn",
+          "type": "referenced_by"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Versioned Task Evidence and Closeout",
+      "type": "spec",
+      "updated": "2026-07-30"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-brief-intake",
+      "owner": "system",
+      "path": ".ai/rules/brief-intake.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Brief-First Intake",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-control-plane",
+      "owner": "system",
+      "path": ".ai/rules/control-plane.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Control Plane Source of Truth",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-dependency-currency",
+      "owner": "system",
+      "path": ".ai/rules/dependency-currency.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Dependency Currency",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-diagnostic-isolation",
+      "owner": "system",
+      "path": ".ai/rules/diagnostic-isolation.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Diagnostic Isolation Before Remediation",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-documentation-currency",
+      "owner": "system",
+      "path": ".ai/rules/documentation-currency.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Documentation Currency",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-isolation",
+      "owner": "system",
+      "path": ".ai/rules/isolation.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Task Isolation",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-knowledge-capture",
+      "owner": "system",
+      "path": ".ai/rules/knowledge-capture.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Typed Knowledge Capture",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-qa-gates",
+      "owner": "system",
+      "path": ".ai/rules/qa-gates.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: QA Gates",
+      "type": "rule",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-rust-verification",
+      "owner": "system",
+      "path": ".ai/rules/rust-verification.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Rust Verification",
+      "type": "rule",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-task-contracts",
+      "owner": "system",
+      "path": ".ai/rules/task-contracts.md",
+      "relations": [
+        {
+          "target": "workflow-execution",
+          "type": "enforced_by"
+        },
+        {
+          "target": "workflow-qa",
+          "type": "enforced_by"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Task Contracts",
+      "type": "rule",
+      "updated": "2026-07-30"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "rule-visual-evidence",
+      "owner": "system",
+      "path": ".ai/rules/visual-evidence.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Rule: Visual Evidence",
+      "type": "rule"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "skill-index",
+      "owner": "system",
+      "path": ".ai/skills/README.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Skills",
+      "type": "skill"
+    },
+    {
+      "corpus": "control-plane",
+      "description": "Generate optional visual specification reports from Markdown specs for UI, API, WebSocket, validation, and flow documentation.",
+      "domain": "control-plane",
+      "id": "skill-pr-blueprint",
+      "keywords": [
+        "blueprint",
+        "spec",
+        "html",
+        "api",
+        "websocket",
+        "validation",
+        "ui",
+        "qa"
+      ],
+      "name": "pr-blueprint",
+      "owner": "system",
+      "path": ".ai/skills/pr-blueprint/SKILL.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "PR Blueprint",
+      "type": "skill"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-brief-intake",
+      "owner": "system",
+      "path": ".ai/workflows/brief-intake.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Brief Intake",
+      "type": "workflow"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-dispatch",
+      "owner": "system",
+      "path": ".ai/workflows/dispatch.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Dispatch",
+      "type": "workflow",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-execution",
+      "owner": "system",
+      "path": ".ai/workflows/execution.md",
+      "relations": [
+        {
+          "target": "rule-task-contracts",
+          "type": "depends_on"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Execution",
+      "type": "workflow",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-learn",
+      "owner": "system",
+      "path": ".ai/workflows/learn.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Learn",
+      "type": "workflow"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-planning",
+      "owner": "system",
+      "path": ".ai/workflows/planning.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Planning",
+      "type": "workflow",
+      "updated": "2026-07-30"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-qa",
+      "owner": "system",
+      "path": ".ai/workflows/qa.md",
+      "relations": [
+        {
+          "target": "rule-qa-gates",
+          "type": "depends_on"
+        }
+      ],
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: QA",
+      "type": "workflow",
+      "updated": "2026-07-24"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-research",
+      "owner": "system",
+      "path": ".ai/workflows/research.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Research",
+      "type": "workflow"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-review",
+      "owner": "system",
+      "path": ".ai/workflows/review.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Workflow: Review",
+      "type": "workflow"
+    },
+    {
+      "corpus": "control-plane",
+      "domain": "control-plane",
+      "id": "workflow-task-template",
+      "owner": "system",
+      "path": ".ai/workflows/task-template.md",
+      "source_metadata_version": 1,
+      "status": "active",
+      "title": "Task Folder Template",
+      "type": "workflow",
+      "updated": "2026-07-30"
+    }
+  ],
+  "errors": [],
+  "generator": "ai sync",
+  "schema_version": 2,
+  "unresolved_references": [],
+  "warnings": []
+}

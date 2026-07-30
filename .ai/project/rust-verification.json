@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "comment": "Reference configuration for the `rust` extension gate, consumed by scripts/rust_verify.py. Assumes a standard Rust layout: workspace manifest at the repository root, member crates under crates/. Repository files + Python stdlib only. Fail closed when missing or invalid.",
+  "verification_scopes": [
+    "control-plane",
+    "affected",
+    "affected-plus-neighbors",
+    "workspace"
+  ],
+  "default_scope": "affected-plus-neighbors",
+  "workspace_manifest": "Cargo.toml",
+  "path_classes": {
+    "control_plane_prefixes": [
+      ".ai/",
+      ".agents/",
+      ".claude/",
+      "scripts/"
+    ],
+    "control_plane_files": [
+      "AGENTS.md",
+      "CLAUDE.md",
+      "GEMINI.md",
+      "README.md",
+      "ai",
+      "ai.cmd",
+      ".gitignore",
+      ".gitattributes"
+    ],
+    "docs_prefixes": [
+      "docs/"
+    ],
+    "docs_suffixes": [
+      ".md"
+    ],
+    "rust_relevant_prefixes": [
+      "crates/",
+      "src/",
+      "benches/",
+      "examples/",
+      "tests/",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain",
+      "build.rs",
+      ".cargo/"
+    ],
+    "rust_ignored_prefixes": [
+      "target/"
+    ]
+  },
+  "escalation": {
+    "half_workspace_threshold": 0.5,
+    "root_manifest_path": "Cargo.toml",
+    "lockfile_path": "Cargo.lock",
+    "toolchain_paths": [
+      "rust-toolchain.toml"
+    ],
+    "cargo_config_prefixes": [
+      ".cargo/"
+    ],
+    "crate_manifest_glob": "crates/*/Cargo.toml",
+    "reasons": {
+      "root_manifest": "root-workspace-manifest-changed",
+      "lockfile": "workspace-lockfile-changed",
+      "toolchain": "rust-toolchain-changed",
+      "cargo_config": "cargo-config-changed",
+      "crate_add_remove": "crate-add-or-remove",
+      "unknown_rust_path": "unknown-rust-relevant-path",
+      "metadata_failure": "cargo-metadata-failure",
+      "half_workspace": "affected-set-reached-half-workspace"
+    }
+  },
+  "commands": {
+    "clippy_deny_flags": [
+      "-D",
+      "warnings"
+    ],
+    "clippy_extra_args": [
+      "--all-targets"
+    ],
+    "test_extra_args": []
+  },
+  "lock": {
+    "name_prefix": "maw-rust-verify",
+    "wait_seconds": 600,
+    "wait_poll_seconds": 1,
+    "heartbeat_seconds": 5
+  },
+  "scratch": {
+    "dir_prefix": "maw-rust-scratch-",
+    "marker_file": "maw-rust-scratch.json",
+    "marker_schema_version": 1
+  },
+  "evidence": {
+    "file_name": "rust-verification-evidence.json",
+    "schema_version": 1,
+    "kind": "rust-verification-evidence"
+  },
+  "cache_log": {
+    "path": ".ai/project/rust-verification-cache-log.json",
+    "schema_version": 1,
+    "kind": "rust-cache-log"
+  }
+}

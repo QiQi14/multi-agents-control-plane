@@ -1,0 +1,95 @@
+id: "task_07_payment_retry_backoff"
+title: "Bounded exponential backoff for the payment settlement worker"
+feature: "Payment settlement reliability"
+status: "QUEUED"
+risk: "high"
+preferred_tool: "codex"
+review_tool: "claude"
+isolation_strategy: "branch"
+verification_scope: "affected-plus-neighbors"
+depends_on:
+presentation_schema_version: "1"
+presentation_purpose: >
+  Stop a failing payment gateway from turning into a self-inflicted outage, and close the quieter
+  path where a slow gateway can authorize the same payment twice.
+presentation_outcome: >
+  A failing gateway call backs off instead of hammering, gives up after a bounded number of
+  attempts, and leaves a dead-lettered job an operator can diagnose. One job can never produce more
+  than one authorization, including when an attempt times out with no answer.
+presentation_scope:
+  - "Retry timing and attempt ceiling in the settlement worker"
+  - "Idempotency key lifetime across retries and timeouts"
+  - "Dead-letter handoff when attempts are exhausted"
+  - "Regression coverage for the outage and the double-authorization path"
+presentation_out_of_scope:
+  - "The ledger and the settled-transaction schema"
+  - "Gateway provider selection or contract terms"
+  - "Queue infrastructure and worker scheduling"
+  - "Dashboards and alerting thresholds"
+presentation_acceptance:
+  - "A gateway outage produces a handful of spaced-out attempts for one job instead of a storm."
+  - "Two workers racing on the same job still authorize the customer exactly once."
+  - "A job that runs out of attempts is visible, with the provider's last answer kept."
+  - "A retry never overlaps the attempt before it, even when that attempt hangs."
+input_contract: >
+  The settlement worker retries a failed gateway call immediately and forever. A gateway outage on
+  2026-07-18 produced 41,204 authorization attempts in nine minutes and rate-limited the whole
+  provider account, stopping settlement for every tenant rather than only the failing one. The
+  worker also re-derives the idempotency key when an attempt times out with no response, so a slow
+  gateway can produce two authorizations for one job. Reproduction, timing, and the exact failing
+  call path are in brief.md; context.md holds the invariants that must survive.
+output_contract: >
+  Retries use bounded exponential backoff with jitter and a hard attempt ceiling, after which the
+  job moves to the dead-letter queue with the provider's last response attached. A retry never
+  re-enters the gateway before the previous attempt has resolved or timed out. The idempotency key
+  is derived once at job pickup and reused for every attempt regardless of outcome, so a retry can
+  never create a second authorization. Backoff is computed from a monotonic source and clamped, so
+  a backwards clock cannot collapse it into a tight loop. The ledger and the settled-transaction
+  schema are untouched.
+routing_policy_version: "2"
+routing_zone: "bounded_implementation"
+routing_axes:
+  - "context_breadth=moderate"
+  - "logic_depth=high"
+  - "visual_interaction=low"
+  - "change_breadth=low"
+  - "uncertainty=low"
+  - "feedback_loop_intensity=high"
+routing_complexity_band: "demanding"
+routing_profile_tool: "codex"
+routing_profile: "bounded_execution"
+routing_reasoning_level: "high"
+routing_provenance: "planner"
+routing_rationale: >
+  The behavior is settled and the writable area is small, so this is bounded implementation rather
+  than research. Correctness depends on concurrency and timing edge cases, and the work runs as a
+  tight edit-run-observe loop against an injected clock; logic_depth=high derives the demanding
+  band, which the declared profile satisfies at the ordinary high reasoning level. Risk selects the
+  review and approval gates, not the executor profile.
+target_files:
+  - ".ai/tasks/queue/task_07_payment_retry_backoff/**"
+  - "src/workers/settlement/**"
+  - "tests/workers/settlement/**"
+forbidden_files:
+  - "src/ledger/** and migrations/**"
+  - "any change to the settled-transaction schema"
+  - "widening the diff into queue infrastructure or worker scheduling"
+acceptance_tests:
+  - "A gateway returning 503 for 30s produces at most 6 attempts for one job, with strictly increasing gaps and non-zero jitter."
+  - "Two workers processing the same job concurrently produce exactly one authorization, including an interleaving where the first attempt times out with no response."
+  - "Exhausting the ceiling moves the job to the dead-letter queue with the last provider response body retained."
+  - "A retry is never dispatched while the previous attempt is still in flight, proven with a fake clock and an injected slow response."
+  - "Backoff never exceeds the configured cap, asserted against the largest observed gap rather than the configured value."
+  - "A backwards clock jump never yields a zero or negative delay."
+  - "The ledger module and migrations are byte-unchanged."
+commands:
+  - "pytest tests/workers/settlement -q"
+  - "python scripts/ai_cli.py verify task_07_payment_retry_backoff --base <dispatch-base> --plan"
+  - "python scripts/ai_cli.py verify task_07_payment_retry_backoff --base <dispatch-base> --run"
+  - "git diff --check"
+known_risks: >
+  This path spends real money. A retry that loses its idempotency key double-charges a customer, and
+  a backoff bug converts a partial outage into a rate-limit ban across every tenant. Both failure
+  modes are invisible in aggregate metrics, so the concurrency and idempotency tests are the gate
+  rather than the dashboards. High risk applies in full: independent cross-family review plus
+  explicit owner approval before merge.

@@ -1,0 +1,485 @@
+version: 1
+name: Agent Control Plane
+canonical_root: .ai
+generated_warning: "<!-- GENERATED FROM .ai/. DO NOT EDIT DIRECTLY. Run `ai sync`. -->"
+
+defaults:
+  default_isolation: branch_or_patch
+  task_root: .ai/tasks
+  generated_dispatch_root: .ai/adapters
+  worktrees_default: false
+  sync_generated_edits_back: false
+  research_tool: antigravity
+  planning_tool: antigravity
+  implementation_tool: codex
+  review_tool: claude
+  # Automatic dispatch lane (task_185): `ai dispatch <task_id> --auto` renders the prompt exactly
+  # as the manual lane, then additionally launches the assigned tool via its per-tool `dispatch`
+  # descriptor (see the commented example below). Off by default; a project turns it on here.
+  # `--auto` can only use a lane this flag already enables — it can never override `false`.
+  auto_dispatch: false
+
+# Per-tool automatic-dispatch descriptors (optional, commented out by default).
+# A tool with no `dispatch` block simply has no auto lane; `--auto` falls back to manual guidance.
+# Uncomment and adapt the block under a real `tools.<name>:` entry above to activate a lane for
+# that tool; `defaults.auto_dispatch: true` is also required. Known placeholders in both forms:
+# {task_id} {tool} {prompt_path} {prompt_text} {prompt_encoded} {prompt_path_encoded}.
+#
+# tools:
+#   codex:
+#     dispatch:
+#       exec:
+#         argv:
+#           - "codex"
+#           - "exec"
+#           - "--prompt-file"
+#           - "{prompt_path}"
+#   claude:
+#     dispatch:
+#       exec:
+#         argv:
+#           - "claude"
+#           - "-p"
+#           - "{prompt_text}"
+#           - "--output-format"
+#           - "json"
+#   antigravity:
+#     dispatch:
+#       deeplink:
+#         url_template: "antigravity://open?file={prompt_path_encoded}&task={task_id}"
+#   kimi-code:
+#     # Illustrative only: activating a tool this table does not yet register also requires a
+#     # full `tools.kimi-code` entry (role, default_isolation, notes, adapter) — the point this
+#     # example proves is that the dispatch descriptor itself needs no new Python per tool.
+#     dispatch:
+#       exec:
+#         argv:
+#           - "kimi"
+#           - "code"
+#           - "--file"
+#           - "{prompt_path}"
+
+# Extension capability registry (task_181). The reusable core (maw_core) owns coordination
+# protocols; language/stack/vendor behavior ships as separately registered extensions. An
+# extension is enabled ONLY by being listed here — never by filesystem presence, import-time
+# side effects, or package discovery. Manifests live under the roots below as
+# `<root>/<id>/extension.json`. This block is REQUIRED and fails closed when missing or malformed
+# with a named reason; the zero-extension form is an explicit `enabled: []` (no default roster is
+# ever substituted). Gate/command entrypoints are TRUSTED first-party code enabled only here; the
+# registry keeps manifests as pure data and path-contains entrypoints, but read_roots/write_roots
+# are declared authority for audit, not a runtime sandbox around trusted code. See
+# `.ai/rules/rust-verification.md` and
+# `.ai/tasks/queue/task_181_gate_registry_plugin_api/extension_api_design.md`.
+# (Manifests are homed under scripts/extensions/ so this task stays within its scripts/**
+# writable area; a later owner-approved task may relocate the discovery root to .ai/extensions.)
+extensions:
+  roots:
+    - scripts/extensions
+  enabled:
+    - rust
+    - codex
+    - claude
+    - antigravity
+
+routing_principles:
+  selection_basis:
+    - task_shape
+    - required_context_window
+    - reasoning_depth
+    - workspace_stability
+    - edit_scope
+    - tool_quota_and_latency
+    - required_review_independence
+  rules:
+    - Tools have preferred fits, not fixed phases.
+    - The planner may assign any tool to research, planning, implementation, or review when the task contract justifies it.
+    - High-risk tasks require independent review and explicit owner merge approval.
+    - Worktrees remain optional and must never be assumed safe for Antigravity.
+    - "Shared routing authority names only stable logical profiles; exact model identities are late-bound from integration-owned local catalog snapshots."
+    - "Risk selects impact evidence, approval, and review gates, never a model prestige tier. Task shape and the derived complexity band select the executor model and reasoning profile, independently of risk. This supersedes Task 184's 'risk is the only reasoning-tier selector' sentence; every scope-authority, high-risk review-independence, and owner-approval gate is preserved unchanged."
+    - "For bounded high-risk feature work, use an eligible cross-family logical review profile at the configured review-depth floor."
+    - "Cross-family review is preferred for independence. If an adequate cross-family reviewer is unavailable, the owner may authorize a fresh substitute to keep diagnosis moving; the handoff and receipt must disclose the substitution, and a same-family substitute does not satisfy the independent merge gate unless the owner explicitly waives that gate."
+    - "Reviewer-session continuity is preferred across implementation, validation, and planning tasks in one dependency chain because it preserves accumulated contract context; receipts disclose every prior task reviewed in that session."
+    - "A fresh independent reviewer session is mandatory only for high-risk research, where prior chain conclusions could bias factual investigation. Other tasks do not require a fresh session unless their own owner gate explicitly says so."
+    - "Choose the least costly profile whose declared capabilities and supported reasoning levels can satisfy the task's zone and complexity band. Maximum reasoning is never a default, a routine band never justifies an escalated profile, and no risk tier raises or lowers the executor profile."
+    - "Reasoning above the configured escalation threshold requires a written task-specific rationale such as native unsafe/ABI work, cryptography, irreversible destructive mutation, unusually hard math/algorithm work, or an unresolved escalation after a threshold-level review."
+    - "A critical-impact annotation strengthens evidence and owner gates but never selects an escalated logical profile or reasoning level by itself."
+    - Canonical risk remains exactly low, medium, or high; critical impact is a routing annotation mapped to high, never a fourth risk token.
+    - "A high-impact task may impose a review-depth floor (routing_taxonomy.review_depth_floor) but never upgrades the task's complexity band; high impact does not make simple work cognitively complex."
+    - "No trigger outside task shape and complexity (release timing, feature prominence, or similar) selects a reasoning tier on its own."
+    - "Task context records a fixed profile only when the task truly requires it; otherwise it records the acceptable profile set and rationale. Receipts always record the actual family, tool, model, reasoning profile, and any independence exception."
+    - "Review the declared feature and evidence first. An out-of-scope platform or security concern is a concise nonblocking follow-up unless it directly violates an acceptance criterion or demonstrates concrete destructive loss/corruption."
+  examples:
+    broad_scaffold_or_project_generation: antigravity
+    tight_patch_or_test_loop: codex
+    complex_math_or_algorithmic_logic: claude
+    broad_repo_mapping: antigravity
+    independent_feature_review: claude_or_codex
+    mechanical_scope_or_receipt_check: codex
+
+# Routing taxonomy (task_192a). ONE canonical, versioned routing vocabulary: task zones, orthogonal
+# task-shape axes, the derived complexity band, capability tags, reasoning levels, and metadata
+# provenance. Python validates this block generically and contains NO zone, axis, capability,
+# provider, or model name; every value below is data. Law and rationale:
+# `.ai/project/routing-taxonomy.md`.
+#
+# This block is OPTIONAL so a minimal or synthetic configuration stays loadable, but no default
+# vocabulary is ever substituted: when it is absent every routing consumer fails closed with
+# `routing-taxonomy-undeclared`, and a tool may then declare no family/capabilities/profiles.
+routing_taxonomy:
+  version: 2
+
+  # Ordered least to greatest. Axis values and band rules draw from exactly this closed set.
+  axis_levels:
+    - low
+    - moderate
+    - high
+
+  # Who chose a task's execution profile. Recorded in task.yaml `routing_provenance`.
+  provenance:
+    - explicit_owner
+    - planner
+    - router
+
+  # Closed capability vocabulary. A tool declares SURFACE capabilities (what its harness provides
+  # regardless of model); a named execution profile declares MODEL capabilities. The effective set
+  # of a (tool, profile) pair is the union of both.
+  capability_tags:
+    large_context_ingestion: "Hold and reason over a large body of material in one pass."
+    repository_research: "Map unfamiliar code, dependencies, and history to answer an open question."
+    visual_iteration: "Author or critique a rendered surface in a look-and-adjust loop."
+    bounded_patch_loop: "Apply a bounded patch and iterate against local commands and tests."
+    multi_file_refactor: "Carry one mechanical change across many files without losing coherence."
+    deep_reasoning: "Sustain long chains of algorithmic, mathematical, or edge-case reasoning."
+    independent_review: "Critique another agent's diff against a contract without inheriting its assumptions."
+
+  # The seven task zones. `required_capabilities` is what any candidate must be able to offer; it is
+  # a hard filter for the later route engine, never a ranking score.
+  zones:
+    mass_digest:
+      summary: "Read, summarize, or inventory a large corpus in one pass."
+      required_capabilities:
+        - large_context_ingestion
+    visual_design:
+      summary: "Author or judge a painted surface where the rendered result is the acceptance evidence."
+      required_capabilities:
+        - visual_iteration
+    bounded_implementation:
+      summary: "Implement one settled contract inside a bounded writable area."
+      required_capabilities:
+        - bounded_patch_loop
+    horizontal_refactor:
+      summary: "Carry one mechanical change across many files or several owners at once."
+      required_capabilities:
+        - multi_file_refactor
+        - large_context_ingestion
+    deep_logic:
+      summary: "Design or verify algorithms, math, concurrency, or dense edge-case behavior."
+      required_capabilities:
+        - deep_reasoning
+    research_diagnosis:
+      summary: "Map unknown territory or isolate a root cause before any remediation is contracted."
+      required_capabilities:
+        - repository_research
+    review:
+      summary: "Independently verify another agent's diff, receipt, and evidence against a contract."
+      required_capabilities:
+        - independent_review
+
+  # Six orthogonal task-shape axes. Each records one declared level from `axis_levels`; the levels
+  # are named ordinal labels, never numbers, and are never summed or averaged.
+  axes:
+    context_breadth:
+      summary: "How much material must be held at once to act correctly."
+      low: "One file or one short document."
+      moderate: "One module or a handful of directly related files."
+      high: "A whole subsystem, a repository-wide sweep, or a large external corpus."
+    logic_depth:
+      summary: "How much sustained reasoning correctness depends on."
+      low: "Mechanical, transcription-level, or copy-shaped change."
+      moderate: "Ordinary program logic using patterns already present in the area."
+      high: "Algorithms, math, concurrency, protocol invariants, or dense edge-case analysis."
+    visual_interaction:
+      summary: "How much of the result is judged by looking at a rendered surface."
+      low: "No painted surface is involved."
+      moderate: "A surface changes but reuses the existing visual language."
+      high: "New visual design decisions must be made and inspected."
+    change_breadth:
+      summary: "How many places the change touches."
+      low: "One file or one bounded area."
+      moderate: "Several files inside one owner."
+      high: "Many files, or several owners at once."
+    uncertainty:
+      summary: "How much is unresolved when the work starts."
+      low: "The contract already states what to do."
+      moderate: "The approach is settled; details remain open."
+      high: "Root cause, feasibility, or approach is genuinely unresolved."
+    feedback_loop_intensity:
+      summary: "How often the work must run something and react to the result."
+      low: "The result is judged by reading it."
+      moderate: "A few command or test cycles."
+      high: "A tight, repeated edit-run-observe loop."
+
+  # The derived complexity band. It is a coarse ORDERED LABEL produced by the named rules below, not
+  # a score: rules are evaluated independently (declaration order is irrelevant), the highest
+  # matching band in `order` wins, and `default` applies when nothing matches. A rule matches when at
+  # least `minimum_count` of its axes hold a level at or above `at_or_above`. Every band therefore
+  # names the exact rule and axes that produced it.
+  complexity_bands:
+    order:
+      - routine
+      - substantial
+      - demanding
+    default: routine
+    rules:
+      depth_or_uncertainty_high:
+        band: demanding
+        at_or_above: high
+        minimum_count: 1
+        restrict_to_axes:
+          - logic_depth
+          - uncertainty
+      multiple_axes_high:
+        band: demanding
+        at_or_above: high
+        minimum_count: 2
+      any_axis_high:
+        band: substantial
+        at_or_above: high
+        minimum_count: 1
+      several_axes_moderate:
+        band: substantial
+        at_or_above: moderate
+        minimum_count: 3
+
+  # Ordered least to most costly. A profile declares which of these it supports; an optional
+  # Each logical profile declares the canonical reasoning levels it supports.
+  reasoning_levels:
+    - standard
+    - high
+    - elevated
+    - maximum
+
+  # Selecting a level ABOVE this one requires a written task-specific rationale in the task contract
+  # (native unsafe/ABI work, cryptography, irreversible destructive mutation, unusually hard
+  # math/algorithm work, or an unresolved escalation after a review at this level).
+  reasoning_escalation_threshold: high
+
+  catalog_provenance:
+    - api_account
+    - desktop_app
+    - bundled
+    - manual
+    - unknown
+
+  resolution_selectors:
+    - app_default
+    - latest_compatible
+
+  profile_preferences:
+    complexity_reasoning:
+      routine: standard
+      substantial: high
+      demanding: high
+    tie_breakers:
+      - preference_rank
+      - tool_order
+      - profile_order
+
+  # Minimum reasoning level for the REQUIRED INDEPENDENT REVIEW of a task at the named risk tier.
+  # Keys are canonical risk tiers. A tier with no entry imposes no floor. A floor raises review
+  # depth only; it never raises the executor's complexity band.
+  review_depth_floor:
+    high: high
+
+isolation_strategies:
+  branch:
+    description: Work on the current repository with an explicit branch and normal git diff.
+    antigravity_safe: true
+  patch:
+    description: Produce or apply a patch without relying on a long-lived branch.
+    antigravity_safe: true
+  branch_or_patch:
+    description: Use a normal branch when safe; otherwise produce a patch without topology changes.
+    antigravity_safe: true
+  patch_review:
+    description: Review a patch or diff without making uncontrolled workspace edits.
+    antigravity_safe: true
+  shadow-copy:
+    description: Copy files to a separate directory for analysis or patch preparation.
+    antigravity_safe: true
+  worktree:
+    description: Use a git worktree only when explicitly enabled for the tool and task.
+    antigravity_safe: false
+  readonly-research:
+    description: Inspect and map the repository without mutating source files.
+    antigravity_safe: true
+  manual:
+    description: Human-controlled isolation. The prompt must state exact expectations.
+    antigravity_safe: configurable
+
+risk_gates:
+  low:
+    requires:
+      - scope_check
+  medium:
+    requires:
+      - scope_check
+      - tests
+      - qa_receipt
+  high:
+    requires:
+      - research_digest
+      - implementation_receipt
+      - tests
+      - independent_review
+      - explicit_merge_approval
+    examples:
+      - authentication
+      - payment
+      - security_sensitive_changes
+      - data_migration
+      - concurrency
+      - public_api_changes
+      - cross_layer_architecture_changes
+
+# Every `family`, `capabilities`, and `profiles` entry below is validated against
+# `routing_taxonomy`. `family` (not the tool id) is what cross-family review independence is checked
+# against, because two tool ids can front the same model family. `strengths`/`avoid` stay advisory
+# human prose; `capabilities` is the authoritative machine vocabulary.
+#
+# NOTE (owner decision point, task_192a): no tool in this roster declares `visual_iteration`. Nothing
+# in `.ai/` currently establishes which tool may claim it, and inventing the claim would fossilize a
+# guess. A `visual_design` route therefore fails closed with "no candidate declares visual_iteration"
+# instead of silently routing to whichever tool is nearby; adding the tag to a tool is a one-line
+# owner change once the claim is established.
+tools:
+  antigravity:
+    role: large_context_workspace_agent
+    family: antigravity
+    capabilities:
+      - large_context_ingestion
+      - repository_research
+      - multi_file_refactor
+    profiles:
+      workspace_general:
+        reasoning_levels:
+          - standard
+          - high
+        complexity_bands:
+          - routine
+          - substantial
+          - demanding
+        preference_rank: 20
+    strengths:
+      - large_context
+      - ide_navigation
+      - repo_research
+      - dependency_mapping
+      - broad_scaffold_implementation
+      - multi_file_refactor
+      - stable_workspace_changes
+    avoid:
+      - unstable_worktree_switching
+      - tiny_tight_feedback_loops
+      - worktree_required_tasks
+    worktree_safe: false
+    default_isolation: branch_or_patch
+    notes:
+      - Use readonly-research for research-only tasks.
+      - Use branch_or_patch for scaffold, broad refactor, or workspace-stable implementation tasks.
+      - Keep the project topology stable unless the user explicitly approves otherwise.
+    adapter:
+      render_source: antigravity
+
+  codex:
+    role: tight_loop_implementation_agent
+    family: codex
+    capabilities:
+      - bounded_patch_loop
+    profiles:
+      bounded_execution:
+        reasoning_levels:
+          - standard
+          - high
+          - elevated
+          - maximum
+        complexity_bands:
+          - routine
+          - substantial
+          - demanding
+        preference_rank: 10
+        capabilities:
+          - independent_review
+    strengths:
+      - implementation_from_contract
+      - terminal_workflow
+      - local_code_execution
+      - bounded_patch_generation
+      - fast_test_fix_loops
+      - mechanical_scope_checks
+    avoid:
+      - giant_repo_ingestion_without_digest
+      - uncontrolled_scope_expansion
+      - broad_scaffolds_without_clear_contract
+    worktree_safe: configurable
+    default_isolation: branch_or_patch
+    notes:
+      - The bounded execution profile is provider-neutral; an integration-owned catalog resolves an exact model only when trustworthy.
+      - Required independent review uses an eligible cross-family logical profile.
+    dispatch:
+      deeplink:
+        url_template: "codex://threads/new?prompt={prompt_encoded}"
+    adapter:
+      render_source: codex
+
+  claude:
+    role: reasoning_and_review_agent
+    family: claude
+    capabilities:
+      - bounded_patch_loop
+    profiles:
+      balanced_reasoning:
+        reasoning_levels:
+          - standard
+          - high
+        complexity_bands:
+          - routine
+          - substantial
+        preference_rank: 15
+        capabilities:
+          - deep_reasoning
+          - independent_review
+      intensive_reasoning:
+        reasoning_levels:
+          - high
+          - elevated
+          - maximum
+        complexity_bands:
+          - substantial
+          - demanding
+        preference_rank: 30
+        capabilities:
+          - deep_reasoning
+          - independent_review
+    strengths:
+      - complex_math
+      - complex_logic
+      - algorithm_design
+      - code_review
+      - edge_cases
+      - refactor_review
+      - test_strategy
+      - naming_and_api_ergonomics
+    avoid:
+      - uncontrolled_parallel_edits
+      - broad_workspace_mutation_without_contract
+    worktree_safe: optional
+    default_isolation: patch_review
+    notes:
+      - Claude may implement complex math, algorithms, or logic-heavy bounded changes when selected by the planner.
+      - Exact model inventory is deliberately absent from shared routing authority.
+      - Required independent review uses an eligible cross-family logical profile.
+      - Elevated or maximum reasoning remains reserved for a documented task-specific need.
+    adapter:
+      render_source: claude

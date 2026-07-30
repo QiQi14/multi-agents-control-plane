@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "receipt_id": "task_07_payment_retry_backoff-qa-1",
+  "task_id": "task_07_payment_retry_backoff",
+  "role": "qa",
+  "sequence": {
+    "round": 1
+  },
+  "actor": {
+    "name": "reviewer",
+    "tool": "claude",
+    "family": "claude",
+    "model": "intensive_reasoning",
+    "reasoning": "high"
+  },
+  "environment": {
+    "os": "Windows 11",
+    "arch": "x86_64",
+    "device": "reviewer-workstation"
+  },
+  "revision": {
+    "base_commit": "3b4fbea0d10c1a28728bd21a0ac36b4eb0da7573",
+    "head_commit": "a91c07de4b2f8ee15c3a0d7b6e4419fca2d0b83e",
+    "diff": "4 files changed, 187 insertions(+), 62 deletions(-)"
+  },
+  "decision": {
+    "status": "revise",
+    "outcome": "Two of the six acceptance tests pass for the wrong reason. The behaviour is close, but the gate that protects a customer's money is not yet load-bearing."
+  },
+  "gates": [
+    {
+      "command": "pytest tests/workers/settlement -q",
+      "status": "pass",
+      "detail": "34 passed; reproduced independently on the review device"
+    },
+    {
+      "command": "mutation check: revert the monotonic clamp",
+      "status": "pass",
+      "detail": "clock-skew regression fails as expected, so that guard is real"
+    },
+    {
+      "command": "mutation check: re-derive the key on timeout",
+      "status": "fail",
+      "detail": "the concurrency test stays GREEN with the defect reintroduced; it never exercises the timeout path"
+    }
+  ],
+  "evidence_refs": [
+    "attempt-timing-table",
+    "concurrency-single-authorization"
+  ],
+  "context_items": [
+    {
+      "context_item_id": "t07-qa-blocking-1",
+      "kind": "blocking",
+      "summary": "The concurrency test proves one authorization only when both attempts RESOLVE. Reintroducing the timeout key defect leaves it green, so the test does not cover the failure mode the task exists to prevent. It needs an interleaving where the first attempt times out with no response and the second succeeds."
+    },
+    {
+      "context_item_id": "t07-qa-blocking-2",
+      "kind": "blocking",
+      "summary": "The backoff cap is asserted against the configured value rather than the observed gaps, so a bug that ignored the cap entirely would still pass while the config kept reading 20s. Assert the largest observed gap instead."
+    },
+    {
+      "context_item_id": "t07-qa-nonblocking-1",
+      "kind": "nonblocking",
+      "summary": "The dead-letter payload keeps the full provider response including headers. Not a contract violation, but those headers carry a provider request id that is useful in support tickets, so it is worth surfacing explicitly rather than leaving it inside an opaque blob."
+    }
+  ],
+  "notes": [
+    "Scope is clean: src/ledger/** and migrations/** are byte-unchanged, confirmed by diff rather than by receipt prose.",
+    "The timing table is convincing and the 41,204 to 6 reduction reproduces on the review device.",
+    "Cross-family independence holds: executed by codex, reviewed by claude."
+  ]
+}

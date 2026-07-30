@@ -1,0 +1,27 @@
+{
+    "schema_version":  1,
+    "title":  "Command Families",
+    "commands":  [
+                     {
+                         "token":  "BLUEPRINT",
+                         "label":  "PR Blueprint",
+                         "summary":  "Extract or author a review specification, then build its self-contained HTML report.",
+                         "invocations":  [
+                                             "init --from-task \u003ctask_id\u003e [--base \u003ccommit\u003e]",
+                                             "build \u003cspec\u003e"
+                                         ]
+                     },
+                     {
+                         "token":  "DOCS",
+                         "label":  "Documentation",
+                         "summary":  "Build, validate, search, inspect, or graph the local control-plane documentation.",
+                         "invocations":  [
+                                             "build",
+                                             "lint",
+                                             "search",
+                                             "stats",
+                                             "graph"
+                                         ]
+                     }
+                 ]
+}

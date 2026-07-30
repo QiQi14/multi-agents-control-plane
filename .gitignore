@@ -1,0 +1,28 @@
+*.DS_STORE
+
+# Python runtime cache
+__pycache__/
+*.py[cod]
+
+# Local virtual environments
+.venv/
+venv/
+
+# Generated dispatch/review prompt copies.
+# `ai dispatch` and `ai review` each write the rendered prompt twice: once into the task folder
+# (contract evidence, tracked) and once here as an adapter copy. The adapter copy has no consumer --
+# `ai sync` builds AGENTS.md/CLAUDE.md/GEMINI.md from `.ai/`, never from these files -- so tracking
+# it only put a generated artifact outside every task's target_files. Adapter README.md files stay
+# tracked; only the generated subtrees are ignored.
+.ai/adapters/*/dispatch/
+.ai/adapters/*/review/
+
+# Temporary task artifacts
+.dispatch/
+_site/
+
+# Rendered example reports. Regenerate with:
+#   ai blueprint build examples/settlement_retry.spec.md --out examples/settlement-retry-report.html
+# The inlined Mermaid runtime makes each one ~5 MB, and the spec plus evidence PNGs are the
+# real source of truth.
+examples/*.html

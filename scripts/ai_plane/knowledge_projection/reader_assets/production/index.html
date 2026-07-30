@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Intelligence — control-plane reader synthesis</title>
+<meta name="description" content="Repository intelligence, control-plane documents, and task contracts in one local reader synthesis.">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/project.css">
+<link rel="stylesheet" href="assets/production-delta.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="#/project">
+    <span class="brand-mark" aria-hidden="true"></span>
+    Control Plane
+    <small>reader synthesis</small>
+  </a>
+  <nav class="nav" id="nav" aria-label="Primary">
+    <a href="#/project" data-screen="project">Project</a>
+    <a href="#/home" data-screen="home">Overview</a>
+    <a href="#/docs" data-screen="docs">Documents</a>
+    <a href="#/tasks" data-screen="tasks">Tasks</a>
+  </nav>
+  <span class="topbar-spacer"></span>
+  <div class="global-search">
+    <label class="sr-only" for="global-q">Search documents and tasks</label>
+    <input id="global-q" type="search" placeholder="Search everything…" autocomplete="off" spellcheck="false">
+  </div>
+  <button class="icon-btn" id="theme-toggle" type="button" aria-label="Colour theme: system">◐ System</button>
+</header>
+
+<main id="main" tabindex="-1"></main>
+
+<script src="assets/data.js"></script>
+<script src="assets/project-data.js"></script>
+<script src="assets/markdown.js"></script>
+<script src="assets/project.js"></script>
+<script src="assets/task-rich.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

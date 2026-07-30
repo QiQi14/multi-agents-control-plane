@@ -1,0 +1,81 @@
+{
+  "id": "codex",
+  "version": "1.0.0",
+  "api_version": 1,
+  "types": [
+    "integration"
+  ],
+  "root": "scripts/extensions/codex",
+  "read_roots": [
+    ".ai"
+  ],
+  "write_roots": [
+    "AGENTS.md"
+  ],
+  "platforms": [
+    "any"
+  ],
+  "integration": {
+    "format": "codex",
+    "agent_document": ".ai/agents/executor.md",
+    "command_catalog_source": ".ai/skills/pr-blueprint/command-catalog.json",
+    "catalogs": {
+      "project_docs": {
+        "title": "Project Docs",
+        "source_root": ".ai/project",
+        "include": null,
+        "exclude": []
+      },
+      "rules": {
+        "title": "Rules",
+        "source_root": ".ai/rules",
+        "include": null,
+        "exclude": []
+      },
+      "workflows": {
+        "title": "Workflows",
+        "source_root": ".ai/workflows",
+        "include": null,
+        "exclude": []
+      }
+    },
+    "argument_placeholder": "<task_id>",
+    "generated_file_extension": ".md",
+    "invoke_separator": " ",
+    "detect_marker": "AGENTS.md",
+    "commands": {
+      "ARCHIVE": "ai archive",
+      "AUDIT_FRAMEWORK": "ai audit-framework",
+      "BLUEPRINT": "ai blueprint",
+      "CARGO": "ai cargo",
+      "CARGO_CACHE": "ai cargo-cache",
+      "DISPATCH": "ai dispatch",
+      "DOCS": "ai docs",
+      "FEATURE": "ai feature",
+      "INIT": "ai init",
+      "LEARN": "ai learn",
+      "MERGE": "ai merge",
+      "PLAN": "ai plan",
+      "QA": "ai qa",
+      "RESEARCH": "ai research",
+      "REVIEW": "ai review",
+      "SKILLS": "ai skills",
+      "SKILLS_ADD": "ai skills add",
+      "SKILLS_LIST": "ai skills list",
+      "SKILLS_REMOVE": "ai skills remove",
+      "SYNC": "ai sync",
+      "TASK": "ai task",
+      "TASKS": "ai tasks",
+      "VERIFY": "ai verify"
+    },
+    "render": {
+      "artifacts": [
+        {
+          "kind": "marker_document",
+          "path": "AGENTS.md",
+          "template": "templates/AGENTS.md.tmpl"
+        }
+      ]
+    }
+  }
+}
