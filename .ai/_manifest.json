@@ -3,167 +3,167 @@
     {
       "command": "ai sync",
       "path": ".agents/rules/brief-intake.md",
-      "sha256": "bf1340ae88068a74cb698873d12f0f5a992148129402678c3ea503fbb97e1e57"
+      "sha256": "b309cfa9967b2419da55bff3c1148d0db93fcc8a5f4c33f6fe7672d2b77d8c06"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/control-plane.md",
-      "sha256": "e96e7462d9f29d88dc21f825a43d4578ff1a8ecea887b7a834dc75f890929fd5"
+      "sha256": "97a6f1991ef7bfd8f3275842f806d26f1fe9d27462a07f128cc12b48a209ef37"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/dependency-currency.md",
-      "sha256": "374888a67d961f3169c9447ea7ffff056804be8820cdf59697201dcad9016182"
+      "sha256": "247032f71447ddb0601e4e910a2f91bb1449c727e7d147af6f40d1c29c7faf57"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/diagnostic-isolation.md",
-      "sha256": "e41b71a6f5b0dcbf3c449292d4313db15d60ac4180e8049ade3861b8b673f374"
+      "sha256": "58a03c57f8135078f254fe7bb8befec1acec2026aa850d6445311afb624c8476"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/documentation-currency.md",
-      "sha256": "e612519113b52532a4f413330b5d785b74f2a707772661254210c64ab763e92c"
+      "sha256": "19b26c0971bf3cfabdec492e563b4b201bde7cfa33a853927e49e8782b8e17f7"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/execution-boundary.md",
-      "sha256": "353d64ba3a58f18fa21332a375d40c1605e5071b6a1dc97527d876048a34e161"
+      "sha256": "f015b1564dbb27d4162b51477d9ca1f52905a9c3bda7cea6dc570adcf256b6ed"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/isolation.md",
-      "sha256": "557ea4b78cf2a1902d8399fee448882a5bb212f189748eea51014dab50dd0f12"
+      "sha256": "4b7a1da95634d0a2fc44835d1a6eaf3d1a5930930799fd267bf18a7bebb8fda5"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/knowledge-capture.md",
-      "sha256": "fc52d9289919352885cf1d059cdb8526d42b5bb302bcac460410f92b6356afa5"
+      "sha256": "22a1794d5784d152b04bc3bf0ea50f46bf6d6b320f8d96fa08ce26f0f93a20d8"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/multi-agents-planning.md",
-      "sha256": "1459eee2ed77eecffc1484a72830a89ef2126f676afa0a852e1cee66c7f51fbc"
+      "sha256": "f7f2b734f8e7dd3ed8cb118c0eb581e2aff2db24f07eab26ce6f923f96a66740"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/qa-audit-protocol.md",
-      "sha256": "b1ec378ac0bb91a396988ad9e8aaaa1f628276e71aa7b00ebf9a4fca5c8a9fef"
+      "sha256": "fc523a0d19ca67586a45514aaa7856d46dd4bd41b0ef297dfbf7e826846533a9"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/qa-gates.md",
-      "sha256": "a4629334c2d6ad8be2d61e12f8684fcb74327050b2a11c2b75d88525a45d594b"
+      "sha256": "fbbf08ba0f7b2f0fbfd23af2abb805571f581a8c3b42698bd87038ccfc1b2039"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/rust-verification.md",
-      "sha256": "110dbdcdeadf9ee106cc62c186b47c433da57a9f42862a53e91cc5782c5b67b0"
+      "sha256": "d215a30bf237b144b07c75b0ba7e56c6e16219cec4893c0a4efac90a61866052"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/shared-state-and-persistence.md",
-      "sha256": "bd6d6e46cc19db311d3ea92ef77f0f4f2d8e501aa20ae17b93644f8b5bbba5dc"
+      "sha256": "c31ca8b4e8991b26f7caf16fa9226e4548a899a036995eea02530f8a0aabe79d"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/task-contracts.md",
-      "sha256": "9811c057c748a57f86399aaefb61dada775f3b25b2b96a65be608ace155b9bb8"
+      "sha256": "a7b6e494a35b04fa9a1d8ae9e544c26bbb5a33f6cbcc1490a1cffa566d10acac"
     },
     {
       "command": "ai sync",
       "path": ".agents/rules/visual-evidence.md",
-      "sha256": "1dd5de320b351cef79a32b70e495149bddb3a2d95610fb6b742333b6d3d8e9cf"
+      "sha256": "5ae51d65e8c2fca6bb247468f681d21a9c836820838f252439fa18bcd27de81f"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/index.md",
-      "sha256": "d0daab2f74b06cbbeaf2eeebe27efc107b5a58808cba62f31d7c0733060b6f5b"
+      "sha256": "bd093176f969c2a498c98df47a2a68ae413d3750d48455e9d302615b5ec5c8eb"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/SKILL.md",
-      "sha256": "37ecad1e5c86421423b29fe2559ec6835b0815b8e56bf85c50b531d5ef062c13"
+      "sha256": "f59f1053ade87314bbf14336d30457949915330e37e08f9d775b6ba44a319c04"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/command-catalog.json",
-      "sha256": "5468ffadbdfefea0ba377f3f6c6669625762e0d55be7de1eb15dfa5b85f8ca29"
+      "sha256": "c453d349df45f237dd363d255c753f4608ac904d7f33a60508a07dffb24967be"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/README.md",
-      "sha256": "76d2ebf577f0cf9cf9798419974ad73581216bef826b2488024ce169688aa431"
+      "sha256": "f33ba811fbd20445e41c0926127290c9739a04eb3dd7daefb23012db712f27f1"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/presets/api-only.yaml",
-      "sha256": "0c3761077f966cd760dcea8a44f55d92bb997566d55c513d506eb7e09529f9d6"
+      "sha256": "d6b6ad6ce482b617d6d63949606f25c51ce7db2ce72762a6810f41772382efd8"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/presets/backend.yaml",
-      "sha256": "3fbc07b359e7c6fbda6e4a83179cd98713f9b349378c42926381a3bdde30ec92"
+      "sha256": "b2d8c24b52897110683373d128c1bae4d5fb3915acca90213b22d4e5201be122"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/presets/engine.yaml",
-      "sha256": "c31da533541e85df5b058c77c2840f80bf395280941753d02f80b4fa945611e1"
+      "sha256": "13a8939a9c5f69d4cd97149764628b150fd16ca44e5e2221a908c488db52f97e"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/presets/frontend.yaml",
-      "sha256": "9b2552168f27dfc8d8059b7db0f35ebb89ad790986392edff8da9e99e45da355"
+      "sha256": "72d76ad5ecbaddc64814e2952fa70fb2e1079ae5f8370ba2bf0d5dca43bc4d47"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/presets/fullstack.yaml",
-      "sha256": "a42b313d15bc47342e89b12e097a12db4fc5e18ab10e1e67b6c72e771566d828"
+      "sha256": "20ce85cfef6c0fd0871d3ddbd081c134a54963bb6068a203981796ce95b774da"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/presets/tool.yaml",
-      "sha256": "a2cfd5f4b829c0254ed1532c3595f1ecfe48daa72e20320dc08ce4fe14506667"
+      "sha256": "7d76880b4461f0aa70ed0e4987be29da0f8bd78497bcc29a0cdb98fa215fbaaa"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/renderer/build_report.py",
-      "sha256": "5a06ca2400054c858e375783fad050ce5e85c69fcf2915b59d97db2bbe15cc76"
+      "sha256": "ddc71c01ab3a2a2bb8d201537f495d9c3b8c06522cb6dcbeb2e8e3ad766d1089"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/renderer/mermaid_render.py",
-      "sha256": "40014f0970b7faa226d9ccfe3f442f9c6cd8c5a98dbddd52db7f4389a3f97396"
+      "sha256": "f4c631bb8009376485e663026243c841496b20c8943cc2a84e5785f86de92752"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/renderer/parse_spec.py",
-      "sha256": "405422cc2db98c7c0a8b2d459721d8bd3bc4f8d8d621fe31234d2757faadfc2e"
+      "sha256": "c64869d860fe4ce6f1676a5bcfacfce28e2e050629eecd6edf9894b64de9709d"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/renderer/render_html.py",
-      "sha256": "7cb6b664668a7c964d4642cbe3b435b7c2a3d03ef6e1233b17cfbdd5d30ac28c"
+      "sha256": "c4b5f05d22735914835bbb11d1bb3a66ed41f4a2fe22b21935a271d9e8949d85"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/renderer/validate_spec.py",
-      "sha256": "5a424a988389684e7d5fd0c60f41714cc8ca0b8879599fbd472f9ed1f16393ab"
+      "sha256": "cceac6d42d1b590f579e3fbde43fe5f1570a5c1083e270432cb2510f0ff89f81"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/schema.md",
-      "sha256": "c57bce5ba42b4dd2eee65e87853c6bf7793ee785881292cfaaeae3ac1ceedb28"
+      "sha256": "edb7e9d501f48a59731576b86e04c7e82042cf3907903539731a305e2dc6d1ba"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/templates/assets/blueprint.css",
-      "sha256": "b86d09128ae910f2c893b67713581d841eb0dcb29a815c8422c173a62087521f"
+      "sha256": "fa29f7956a80d314872c8261ab9f3748d930c227a820c5ba8104df55d87a6a48"
     },
     {
       "command": "ai sync",
       "path": ".agents/skills/pr-blueprint/template/templates/layout.html",
-      "sha256": "bd326834aac4496d234c48f6cfd41a8add11c1442d3c8e198d05eba4367e71a1"
+      "sha256": "40a51230c1aa30689cc961433a728a06f0ba39896b7031b093ccd63d97cc33ad"
     },
     {
       "command": "ai sync",
@@ -183,47 +183,47 @@
     {
       "command": "ai sync",
       "path": ".agents/workflows/brief-intake.md",
-      "sha256": "9a264798b9454f1874744442df363f71ecdebf6f29eff158bbaad82e7119899b"
+      "sha256": "ae81aab45df98f61ef322bc378700fcd1a580bd5315a3b923bfae9beb292ed30"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/dispatch.md",
-      "sha256": "44455d1cfd14a5cedcfe504ca46393ea8dc5eea29ee1a57679e5b3f13d42e0aa"
+      "sha256": "0445f29d6ef69d63f593ead757da1c03ba1a2b7821e0576c80e2f12b7ffd3aee"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/execution.md",
-      "sha256": "45562a66680e8e8abf40f20bff32b461501a1c96f5b97e899502020573d813c0"
+      "sha256": "e3098b6d282ba5c1e7265d30177a2e5d4ebcccae14430b7724957a79a9fa3d67"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/learn.md",
-      "sha256": "390a06154fd89cd911010e6566c4baf2e135d938393d20b7265c86680d828cbe"
+      "sha256": "44854fa080600d968a3c943d8aa530f33ae0301446226eeefb85c6439f505477"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/planning.md",
-      "sha256": "95e975c50eb4f749103f8f4cb669da342c1767e9ac626a09123c4a8c8b7af921"
+      "sha256": "55cfde937cba0a9418ed71149cec4d7df3592181ca42139f7f15d877318fd967"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/qa.md",
-      "sha256": "cc8feeccb03c308db4f38dd65cd194d2557b6afad3313ed4b4c400ef285892f4"
+      "sha256": "26135722b7dddc464ea1c2e67fe631ec5c43271c12a0d155a4ff1359813a0f1b"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/research.md",
-      "sha256": "8ec4901619fe5051ca801f04edd974bead7ed72137db399fff360e18064b87e4"
+      "sha256": "4b9072f5a17b6be51474bd7b89e20219191cdf010b52b255251664ae084373cd"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/review.md",
-      "sha256": "3a7a9fa244959c3bd7e08b95d25e0a970fc778d512ef883e0dc83c86c7d0d431"
+      "sha256": "16d9a2b1dc9c6cea64c83a54739778ec6143b775bbb09dd06c1a19eba11acdd8"
     },
     {
       "command": "ai sync",
       "path": ".agents/workflows/task-template.md",
-      "sha256": "6e26aecf1f00a6325f25e902b782db6e7fd3577bc5d3aa0fc09a8343f1a070d4"
+      "sha256": "acd89cc8cc7581d28fa5ae8265f7bfffdc8de1ff40af09c7422e24871daa36be"
     },
     {
       "command": "ai sync",
@@ -233,87 +233,87 @@
     {
       "command": "ai sync",
       "path": ".claude/README.md",
-      "sha256": "e57ad36a32d01c71b5ac9c89dfc516b57e3fc7cfe5b8abbc401f27c248a0003b"
+      "sha256": "3d301b6da9392eabd761b51c03db11516603339564132215c7c9c4211050e2d8"
     },
     {
       "command": "ai sync",
       "path": ".claude/commands/dispatch.md",
-      "sha256": "465cce20e60c83009077ae89840fb25713ccc45712b11908ec9ea2943d1ba0ef"
+      "sha256": "d854a5a0b337da9b0f104a6b706a452bf2bbe164bd9f422ad1f874ce8a4f1bde"
     },
     {
       "command": "ai sync",
       "path": ".claude/commands/qa.md",
-      "sha256": "a658cd01ec0d7b4c9f9c66b5404bb10721472f31e53abbb229676e0b920ba0b8"
+      "sha256": "000abcac7128e1e1564b82a5e26be5110c17420f223d6b5085ddb3c434e9fa00"
     },
     {
       "command": "ai sync",
       "path": ".claude/commands/review.md",
-      "sha256": "94d1c9a0386cea4b68b53ab76eb4ca1fe1739a7adfed9c6bd824826677f23f10"
+      "sha256": "6358cc9e09add429b7e055f45ce8ba73f9e298f5f36fa1d8d5362e2e4f018ea9"
     },
     {
       "command": "ai sync",
       "path": ".claude/settings.json",
-      "sha256": "abf302215ecdbd72881ea52442dec8da483d7b1e5193ff4638bf812315bd1b65"
+      "sha256": "2e5bea05b6ce897953761ba4e63d20d6902397781f7945a3bd82a5130928e199"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/brief-intake.md",
-      "sha256": "9a264798b9454f1874744442df363f71ecdebf6f29eff158bbaad82e7119899b"
+      "sha256": "ae81aab45df98f61ef322bc378700fcd1a580bd5315a3b923bfae9beb292ed30"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/dispatch.md",
-      "sha256": "44455d1cfd14a5cedcfe504ca46393ea8dc5eea29ee1a57679e5b3f13d42e0aa"
+      "sha256": "0445f29d6ef69d63f593ead757da1c03ba1a2b7821e0576c80e2f12b7ffd3aee"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/execution.md",
-      "sha256": "45562a66680e8e8abf40f20bff32b461501a1c96f5b97e899502020573d813c0"
+      "sha256": "e3098b6d282ba5c1e7265d30177a2e5d4ebcccae14430b7724957a79a9fa3d67"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/learn.md",
-      "sha256": "390a06154fd89cd911010e6566c4baf2e135d938393d20b7265c86680d828cbe"
+      "sha256": "44854fa080600d968a3c943d8aa530f33ae0301446226eeefb85c6439f505477"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/planning.md",
-      "sha256": "95e975c50eb4f749103f8f4cb669da342c1767e9ac626a09123c4a8c8b7af921"
+      "sha256": "55cfde937cba0a9418ed71149cec4d7df3592181ca42139f7f15d877318fd967"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/qa.md",
-      "sha256": "cc8feeccb03c308db4f38dd65cd194d2557b6afad3313ed4b4c400ef285892f4"
+      "sha256": "26135722b7dddc464ea1c2e67fe631ec5c43271c12a0d155a4ff1359813a0f1b"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/research.md",
-      "sha256": "8ec4901619fe5051ca801f04edd974bead7ed72137db399fff360e18064b87e4"
+      "sha256": "4b9072f5a17b6be51474bd7b89e20219191cdf010b52b255251664ae084373cd"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/review.md",
-      "sha256": "3a7a9fa244959c3bd7e08b95d25e0a970fc778d512ef883e0dc83c86c7d0d431"
+      "sha256": "16d9a2b1dc9c6cea64c83a54739778ec6143b775bbb09dd06c1a19eba11acdd8"
     },
     {
       "command": "ai sync",
       "path": ".claude/workflows/task-template.md",
-      "sha256": "6e26aecf1f00a6325f25e902b782db6e7fd3577bc5d3aa0fc09a8343f1a070d4"
+      "sha256": "acd89cc8cc7581d28fa5ae8265f7bfffdc8de1ff40af09c7422e24871daa36be"
     },
     {
       "command": "ai sync",
       "path": "AGENTS.md",
-      "sha256": "911bf052dbe15bbcfb7fa11a8e3524c0113bd85889377af64238de83dc3ce922"
+      "sha256": "82fbb639bacf53c402a5e4d1742be8003ee0c32ab9c31d1dcff937705a32555d"
     },
     {
       "command": "ai sync",
       "path": "CLAUDE.md",
-      "sha256": "8d748137fca032fb3db117dc4e5ad3063c60fd20c78893c100da0b501d08a1d1"
+      "sha256": "cd32c964312c21d0f0d7bbf73986454768172427f3c1438562f080cce2236347"
     },
     {
       "command": "ai sync",
       "path": "GEMINI.md",
-      "sha256": "3a6dfa61d95d8bc39e4a88e15643a3085192c85f264bbee489b05917c3e4cd4a"
+      "sha256": "71253bfda25787fac7a981bed4923b3dcb9e2a8c695ad552d2b2c7516ca28e1b"
     }
   ],
   "schema_version": 1
