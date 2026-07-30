@@ -206,5 +206,46 @@ class AiCliLauncherAndShimTests(unittest.TestCase):
         self.assertEqual(0, from_root.returncode)
 
 
+class PassthroughSplitTests(unittest.TestCase):
+    """Everything after `--` is split off before argparse sees it.
+
+    argparse changed between 3.11 and 3.12: on 3.11 an option-like token after `--` inside an
+    `nargs="*"` positional is rejected as an unrecognized argument, so
+    `ai cargo t --base b -- clippy --locked` worked on 3.12 and exited 2 on 3.11. Splitting first
+    gives the CLI one contract on every supported version.
+    """
+
+    def setUp(self) -> None:
+        import scripts.ai_cli as ai_cli
+        self.split = ai_cli.split_passthrough
+        self.dests = ai_cli.PASSTHROUGH_DEST
+
+    def test_option_like_tokens_after_the_separator_are_passthrough(self) -> None:
+        head, rest = self.split(
+            ["cargo", "task_x", "--base", "b0", "--", "clippy", "-p", "graph", "--locked"])
+        self.assertEqual(["cargo", "task_x", "--base", "b0"], head)
+        self.assertEqual(["clippy", "-p", "graph", "--locked"], rest)
+
+    def test_argv_without_a_separator_is_untouched(self) -> None:
+        argv = ["docs", "build"]
+        head, rest = self.split(argv)
+        self.assertEqual(argv, head)
+        self.assertEqual([], rest)
+
+    def test_only_the_first_separator_splits(self) -> None:
+        # A second `--` belongs to the forwarded command, not to us.
+        head, rest = self.split(["cargo", "t", "--", "test", "--", "--nocapture"])
+        self.assertEqual(["cargo", "t"], head)
+        self.assertEqual(["test", "--", "--nocapture"], rest)
+
+    def test_a_trailing_separator_yields_no_passthrough(self) -> None:
+        head, rest = self.split(["cargo", "t", "--"])
+        self.assertEqual(["cargo", "t"], head)
+        self.assertEqual([], rest)
+
+    def test_every_passthrough_command_declares_a_destination(self) -> None:
+        self.assertEqual({"cargo": "cargo_argv", "ext": "args"}, self.dests)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -283,9 +283,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
+# Commands that forward everything after `--` to another tool, and the attribute each stores it in.
+PASSTHROUGH_DEST = {"cargo": "cargo_argv", "ext": "args"}
+
+
+def split_passthrough(raw: list[str]) -> tuple[list[str], list[str]]:
+    """Split argv at the first `--`, before argparse sees it.
+
+    argparse's treatment of tokens after `--` inside an `nargs="*"` positional changed between
+    Python 3.11 and 3.12: on 3.11 `ai cargo t --base b -- clippy --locked` fails with
+    "unrecognized arguments: --locked", while 3.12 accepts it. Splitting here gives the CLI one
+    contract on every supported version instead of inheriting argparse's.
+    """
+    if "--" not in raw:
+        return raw, []
+    index = raw.index("--")
+    return raw[:index], raw[index + 1:]
+
+
 def main(argv: list[str] | None = None) -> None:
     configure_utf8_stdio()
     raw = list(sys.argv[1:] if argv is None else argv)
+    raw, passthrough = split_passthrough(raw)
     try:
         initialize_runtime_config()
     except ConfigError as error:
@@ -294,6 +313,12 @@ def main(argv: list[str] | None = None) -> None:
             die(str(error))
     parser = build_parser()
     args = parser.parse_args(raw)
+
+    if passthrough:
+        dest = PASSTHROUGH_DEST.get(getattr(args, "command", ""))
+        if dest is None:
+            die(f"'{getattr(args, 'command', '')}' takes no arguments after '--'")
+        setattr(args, dest, [*(getattr(args, dest, None) or []), *passthrough])
 
     if args.command == "init":
         cmd_init(args)

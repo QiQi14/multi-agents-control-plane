@@ -1078,9 +1078,20 @@ class LockTests(RustVerifyFixture):
             self.assertEqual("task_heart", first["task_id"])
             self.assertEqual(["ai", "verify"], first["argv"])
             self.assertTrue(first["started_utc"])
-            time.sleep(0.15)
+
+            # Wait for the heartbeat to advance rather than assuming a scheduling deadline. The
+            # regression worth catching is "the heartbeat never refreshes". A fixed sleep also
+            # fails when a loaded CI machine does not schedule the 0.05s timer thread in time,
+            # which is a property of the runner rather than of the lock.
+            deadline = time.monotonic() + 10.0
             second = lock.holder_metadata()
-            self.assertGreater(second["heartbeat_utc"], first["heartbeat_utc"])
+            while second["heartbeat_utc"] <= first["heartbeat_utc"] and time.monotonic() < deadline:
+                time.sleep(0.02)
+                second = lock.holder_metadata()
+            self.assertGreater(
+                second["heartbeat_utc"], first["heartbeat_utc"],
+                "heartbeat never advanced within 10s; the refresh thread is not running",
+            )
         finally:
             lock.release()
 
