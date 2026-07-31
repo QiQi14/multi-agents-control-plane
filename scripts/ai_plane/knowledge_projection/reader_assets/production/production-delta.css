@@ -554,3 +554,35 @@
     gap: 3px;
   }
 }
+
+/* Receipt cards read as pairs: an executor attempt and the QA round that answered it.
+   The shared .relgroups auto-fit packs three 260px columns into the task column, which shreds the
+   Result prose into a two-or-three-word ribbon and splits a pair across rows. Two fixed columns
+   give each card room and put the attempt beside its round. minmax(0, 1fr) rather than 1fr so a
+   long unbroken token cannot push a column past its share. */
+.relgroups--receipts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Each card ends where its content ends. A QA round is routinely half the height of the attempt
+     it answers, a gap that reaches thousands of pixels, and grid's default stretch would draw
+     that much empty bordered box under the shorter card. The pair still starts on the same row. */
+  align-items: start;
+}
+
+/* A receipt with no counterpart takes the full width rather than leaving the other column empty:
+   the first attempt, which answers the task rather than a finding, and any round nothing answered. */
+.relgroups--receipts > .relgroup--full {
+  grid-column: 1 / -1;
+}
+
+/* Separation between a receipt's blocks. This carries the spacing that used to be an inline style
+   on each block; levelling adjusts these margins to seat a section its paired card starts lower,
+   and an inline style would be the declaration it has to fight. */
+.relgroup-section {
+  margin-top: 12px;
+}
+
+@media (max-width: 860px) {
+  .relgroups--receipts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

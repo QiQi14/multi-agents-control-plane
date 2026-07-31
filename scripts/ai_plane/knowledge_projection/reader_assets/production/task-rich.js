@@ -122,16 +122,43 @@
     }).join('') + '</ol>';
   }
 
+  function pairedReceipts(receipts) {
+    // A QA round shares its row with the executor attempt that ANSWERS it, which is the attempt
+    // after it, not the one it reviewed. So the first attempt -- the response to the task itself,
+    // with no finding behind it -- takes a full row, as does a round nothing answered.
+    var paired = [];
+    var index = 0;
+    while (index < receipts.length) { paired[index] = false; index += 1; }
+    index = 0;
+    while (index < receipts.length - 1) {
+      if (receipts[index].role === 'qa' && receipts[index + 1].role === 'executor') {
+        paired[index] = true;
+        paired[index + 1] = true;
+        index += 2;
+      } else {
+        index += 1;
+      }
+    }
+    return paired;
+  }
+
   function receiptCards(task, receipts, includeContext) {
     if (!receipts.length) {
       return '<p class="truth-empty">No typed executor or QA receipt summary is available.</p>';
     }
-    return '<div class="relgroups">' + receipts.map(function (receipt, index) {
+    var paired = pairedReceipts(receipts);
+    return '<div class="relgroups relgroups--receipts">' + receipts.map(function (receipt, index) {
       var status = receipt.status || 'not recorded';
       var notes = array(receipt.notes);
       var sourceOnlyCount =
         array(receipt.sourceOnlyFields).length + (Number(receipt.sourceOnlyNoteCount) || 0);
-      return '<article class="card relgroup" data-receipt-role="' + esc(receipt.role || '') + '">' +
+      var notice = sourceOnlyNotice(task, sourceOnlyCount, 'receipt detail');
+      return '<article class="card relgroup' + (paired[index] ? '' : ' relgroup--full') +
+        '" data-receipt-role="' + esc(receipt.role || '') + '">' +
+        // The head is one block so a paired QA round and executor attempt can be levelled to a
+        // common height: Result wraps to a different line count on each side, and without this the
+        // Record row, the Notes, and the findings list all start at a different height per card.
+        '<div class="relgroup-head">' +
         '<h3>' + esc(receiptTitle(receipt, index)) + '</h3>' +
         '<dl class="truth-kv">' +
           (receipt.actor ? '<div><dt>Actor</dt><dd>' + esc(receipt.actor) + '</dd></div>' : '') +
@@ -140,14 +167,20 @@
           '<div><dt>Record</dt><dd>' + (receipt.legacy ? 'Legacy typed boundary' : 'Governed typed receipt') +
           '</dd></div>' +
         '</dl>' +
+        '</div>' +
+        // Each block below is a named section so a paired card can be levelled against it. The
+        // margin moved out of an inline style because levelling adjusts it, and an inline style
+        // would be the thing it has to overwrite.
         (notes.length
-          ? '<div style="margin-top:12px"><strong>Notes</strong><ul class="truth-list">' +
+          ? '<div class="relgroup-section relgroup-notes"><strong>Notes</strong>' +
+              '<ul class="truth-list">' +
               notes.map(function (note) { return '<li>' + esc(note) + '</li>'; }).join('') +
             '</ul></div>'
           : '') +
-        sourceOnlyNotice(task, sourceOnlyCount, 'receipt detail') +
+        (notice ? '<div class="relgroup-section relgroup-notice">' + notice + '</div>' : '') +
         (includeContext
-          ? '<div style="margin-top:12px"><strong>Findings and follow-ups</strong>' +
+          ? '<div class="relgroup-section relgroup-findings">' +
+              '<strong>Findings and follow-ups</strong>' +
               contextHtml(task, array(receipt.context)) + '</div>'
           : '') +
       '</article>';
@@ -280,8 +313,172 @@
     ];
   }
 
+  var ANCHOR_KEY = 'relgroup-anchor';
+
+  function offsetWithin(element, card) {
+    return element.getBoundingClientRect().top - card.getBoundingClientRect().top;
+  }
+
+  function labelledRows(scope, into) {
+    // Key each row on the label a reader sees rather than on its position: a field is omitted when
+    // the receipt does not carry it -- a QA round with no actor has no Actor row -- so the third
+    // row is not the same field on both sides. Result to Result is a true correspondence.
+    if (!scope) return into;
+    var rows = scope.querySelectorAll('.truth-kv > div');
+    for (var index = 0; index < rows.length; index++) {
+      var term = rows[index].querySelector('dt');
+      if (term) into[term.textContent.trim()] = rows[index];
+    }
+    return into;
+  }
+
+  function alignableGroups(card) {
+    // Fixed slots first, so group N names the same section on both cards even when one of them
+    // omits a section outright; then one group per findings item. ANCHOR_KEY marks the element
+    // whose top the group is aligned by, and cannot collide with a <dt> label.
+    var groups = [];
+    var head = {};
+    var title = card.querySelector('.relgroup-head h3');
+    if (title) head[ANCHOR_KEY] = title;
+    labelledRows(card.querySelector('.relgroup-head'), head);
+    groups.push(head);
+
+    var sections = ['.relgroup-notes', '.relgroup-notice', '.relgroup-findings'];
+    for (var s = 0; s < sections.length; s++) {
+      var section = card.querySelector(sections[s]);
+      var group = {};
+      if (section) group[ANCHOR_KEY] = section;
+      groups.push(group);
+    }
+
+    var items = card.querySelectorAll('.relgroup-findings .truth-list > li');
+    for (var index = 0; index < items.length; index++) {
+      var fields = {};
+      fields[ANCHOR_KEY] = items[index];
+      labelledRows(items[index], fields);
+      groups.push(fields);
+    }
+    return groups;
+  }
+
+  function resetLevelling(card) {
+    var touched = card.querySelectorAll('[data-levelled]');
+    for (var index = 0; index < touched.length; index++) {
+      touched[index].style.minHeight = '';
+      touched[index].style.marginTop = '';
+      touched[index].removeAttribute('data-levelled');
+    }
+  }
+
+  function levelReceiptHeads() {
+    // Level a paired QA round and executor attempt section by section and row by row, so Result,
+    // Finding, Resolution and every other field occupy the same height on both sides and nothing
+    // below them drifts. Two adjustments are needed: minHeight equalises a row whose prose wraps
+    // to a different number of lines, and marginTop re-seats a section the other card starts
+    // lower, which minHeight alone cannot fix when one card omits a section entirely.
+    //
+    // The findings LISTS are still matched by position, which pairs item N with item N. That is a
+    // layout convenience, not a recorded relationship: an executor reports work no reviewer asked
+    // for, so the two lists differ in length and item N is not always the same subject. The typed
+    // link that would make it a real correspondence is related_context_item_id, which these
+    // receipts do not carry.
+    var grids = document.querySelectorAll('.relgroups--receipts');
+    for (var g = 0; g < grids.length; g++) {
+      var cards = grids[g].children;
+      var entries = [];
+      var index;
+      for (index = 0; index < cards.length; index++) {
+        resetLevelling(cards[index]);
+        entries.push({ card: cards[index], groups: alignableGroups(cards[index]) });
+      }
+      if (!entries.length || entries[0].card.getBoundingClientRect().height === 0) continue;
+
+      var bands = {};
+      for (index = 0; index < entries.length; index++) {
+        // Group by the row each card actually landed on, so this follows the grid rather than
+        // assuming a pairing: a full-width card is alone in its band and is left untouched.
+        var top = String(Math.round(entries[index].card.getBoundingClientRect().top));
+        if (!bands[top]) bands[top] = [];
+        bands[top].push(entries[index]);
+      }
+
+      Object.keys(bands).forEach(function (top) {
+        var band = bands[top];
+        if (band.length < 2) return;
+        var depth = 0;
+        band.forEach(function (entry) { depth = Math.max(depth, entry.groups.length); });
+
+        for (var slot = 0; slot < depth; slot++) {
+          // Top down: each pass measures a layout the earlier passes have already settled.
+          var present = band.filter(function (entry) {
+            return entry.groups[slot] && entry.groups[slot][ANCHOR_KEY];
+          });
+          if (present.length > 1) {
+            var lowest = 0;
+            present.forEach(function (entry) {
+              lowest = Math.max(lowest, offsetWithin(entry.groups[slot][ANCHOR_KEY], entry.card));
+            });
+            present.forEach(function (entry) {
+              var anchor = entry.groups[slot][ANCHOR_KEY];
+              var shortfall = lowest - offsetWithin(anchor, entry.card);
+              if (shortfall <= 0.5) return;
+              var current = parseFloat(window.getComputedStyle(anchor).marginTop) || 0;
+              anchor.style.marginTop = (current + shortfall) + 'px';
+              anchor.setAttribute('data-levelled', 'top');
+            });
+          }
+
+          var labels = {};
+          band.forEach(function (entry) {
+            var group = entry.groups[slot];
+            if (!group) return;
+            Object.keys(group).forEach(function (key) {
+              if (key === ANCHOR_KEY) return;
+              labels[key] = (labels[key] || 0) + 1;
+            });
+          });
+          Object.keys(labels).forEach(function (key) {
+            if (labels[key] < 2) return;   // a field only one side carries has nothing to level with
+            var tallest = 0;
+            band.forEach(function (entry) {
+              var row = entry.groups[slot] && entry.groups[slot][key];
+              if (row) tallest = Math.max(tallest, row.getBoundingClientRect().height);
+            });
+            band.forEach(function (entry) {
+              var row = entry.groups[slot] && entry.groups[slot][key];
+              if (!row) return;
+              row.style.minHeight = tallest + 'px';
+              row.setAttribute('data-levelled', 'height');
+            });
+          });
+        }
+      });
+    }
+  }
+
+  var levelHandle = 0;
+  function queueLevelReceiptHeads() {
+    // Cancel and reschedule rather than latch a "queued" flag. requestAnimationFrame does not run
+    // while the page is not compositing -- a hidden tab, a backgrounded window -- and a flag set
+    // before such a frame would stay set, disabling every later pass. clearTimeout cannot wedge,
+    // and reading getBoundingClientRect below forces the layout the measurements need anyway.
+    if (levelHandle) window.clearTimeout(levelHandle);
+    levelHandle = window.setTimeout(function () {
+      levelHandle = 0;
+      levelReceiptHeads();
+    }, 0);
+  }
+
+  if (typeof window.MutationObserver === 'function') {
+    // childList only: the pass writes style attributes, so observing attributes would re-trigger it.
+    new window.MutationObserver(queueLevelReceiptHeads)
+      .observe(document.documentElement, { childList: true, subtree: true });
+  }
+  window.addEventListener('resize', queueLevelReceiptHeads);
+
   window.CPTaskRich = {
     evidence: evidence,
+    levelReceiptHeads: levelReceiptHeads,
     presentation: presentation,
     review: review,
     source: source,
