@@ -1,0 +1,91 @@
+id: "task_01_per_task_usage_accounting"
+title: "Per-task usage accounting: measured tokens, quota, and a calibrated estimate"
+feature: "Cost visibility for multi-agent work"
+status: "QUEUED"
+risk: "medium"
+preferred_tool: "claude"
+review_tool: "pending"
+isolation_strategy: "patch"
+verification_scope: "control-plane-only"
+presentation_schema_version: "1"
+presentation_purpose: >
+  A team running agents across several tools cannot currently tell what a task cost. The planner is
+  already told to weigh quota, but nothing measures it, so the guidance rests on a number nobody has.
+presentation_outcome: >
+  Every task reports what it consumed: measured tokens and cost where the tool records them, quota
+  consumption where the tool reports it, and a clearly labelled estimate where it does not, with
+  unmeasurable work reported as unknown rather than as zero.
+presentation_scope:
+  - "Per-task token and cost reporting across tools"
+  - "Subscription quota visibility where a tool exposes it"
+  - "Rates supplied and versioned by the user rather than assumed"
+presentation_out_of_scope:
+  - "Changing which tool is routed to a task"
+  - "Reading provider APIs, credentials, or account state over the network"
+  - "Billing reconciliation against a provider invoice"
+presentation_acceptance:
+  - "A task that ran on a tool recording usage reports its measured tokens and, when rates are configured, a cost."
+  - "A task that ran on a tool recording no usage reports a labelled estimate or unknown, never zero."
+  - "Subscription quota appears only for a tool that actually reports it."
+  - "No cost figure appears without stating whether it was measured or estimated."
+input_contract: >
+  Consume only local, on-disk records a tool writes for itself: Claude Code session transcripts,
+  Codex rollout files, and Antigravity conversation databases. Rates are user-supplied data carrying
+  an as_of date and a source; no rate is ever inferred from model memory. The routing engine's
+  existing law is unchanged: usage is advisory and never alters eligibility, ranking, or resolution.
+output_contract: >
+  Add an `ai usage` command family that folds usage across every receipt event of a task and reports
+  it. Price the four token classes separately, since cached input dominates volume and is charged at
+  a different rate; a single blended rate is wrong by roughly an order of magnitude. Report reasoning
+  tokens as their own line because they are billed and never appear as text. Collectors are per-tool
+  and fail closed: a tool with no readable record reports unknown. Billing and plan state live in the
+  checkout-local profile, never in committed configuration.
+routing_policy_version: "2"
+routing_zone: "bounded_implementation"
+routing_axes:
+  - "context_breadth=moderate"
+  - "logic_depth=moderate"
+  - "visual_interaction=low"
+  - "change_breadth=moderate"
+  - "uncertainty=high"
+  - "feedback_loop_intensity=moderate"
+routing_complexity_band: "demanding"
+routing_profile_tool: "claude"
+routing_profile: "intensive_reasoning"
+routing_reasoning_level: "high"
+routing_provenance: "explicit_owner"
+routing_rationale: >
+  The owner assigned this directly and waived independent review because the work is experimental:
+  the input formats are private on-disk shapes that no vendor documents or guarantees. Uncertainty is
+  high for that reason, while the change itself is bounded to the control plane.
+target_files:
+  - ".ai/tasks/queue/task_01_per_task_usage_accounting/**"
+  - "scripts/ai_plane/usage.py"
+  - "scripts/ai_plane/usage_sources.py"
+  - "scripts/ai_cli.py"
+  - "scripts/tests/test_ai_usage.py"
+  - ".gitignore"
+  - "README.md"
+forbidden_files:
+  - "any network, credential, or provider-API access from the plane"
+  - "routing engine behavior: eligibility, ranking, resolution, or output bytes"
+  - "hardcoded vendor prices, or any rate without an as_of date and source"
+  - "maw_core modules (verify_core.py, verify_contract.py, extension_registry.py)"
+acceptance_tests:
+  - "A Claude transcript whose turn is split across records with a repeated output_tokens is counted once, not once per record."
+  - "A tool with no readable usage record yields unknown, and unknown never renders as a zero cost."
+  - "Cost is computed per token class; a fixture where cached input dominates does not price cached tokens at the input rate."
+  - "A rate table without an as_of date is rejected."
+  - "Quota is reported only for a tool whose record carries it."
+  - "The estimate path is labelled as an estimate wherever it is reported."
+commands:
+  - "python -m unittest scripts.tests.test_ai_usage"
+  - "python -m unittest scripts.tests.test_ai_architecture"
+  - "ai usage show <task_id>"
+  - "ai doctor"
+  - "git diff --check"
+known_risks: >
+  These are private on-disk formats, not published APIs, and they will change without notice. Every
+  collector must validate the shape it reads and degrade to unknown instead of trusting field
+  positions. The calibration ratios measured during research came from one machine's sessions and
+  are not constants; they belong in data with a sample size, not in code.

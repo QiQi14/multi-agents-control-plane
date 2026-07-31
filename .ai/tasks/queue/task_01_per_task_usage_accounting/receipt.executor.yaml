@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "receipt_id": "task_01_per_task_usage_accounting-executor-1",
+  "task_id": "task_01_per_task_usage_accounting",
+  "role": "executor",
+  "sequence": {
+    "attempt": 1
+  },
+  "actor": {
+    "name": "Claude executor",
+    "family": "anthropic",
+    "tool": "claude",
+    "model": "Opus 5",
+    "reasoning": "high"
+  },
+  "revision": {
+    "base_commit": "e7decdd09224bd011c3e2e951df6593d9e741eaf",
+    "head_commit": "e7decdd09224bd011c3e2e951df6593d9e741eaf",
+    "diff": "e7decdd09224bd011c3e2e951df6593d9e741eaf..working-tree"
+  },
+  "environment": {
+    "os": "Windows 11",
+    "arch": "AMD64",
+    "device": "local development checkout",
+    "toolchain": "Python 3.12.10"
+  },
+  "decision": {
+    "status": "ready",
+    "outcome": "An `ai usage show` command reports measured tokens and quota for the tools that record them, a labelled estimate range for the one that does not, and unknown wherever nothing can be measured. Prices come only from a user-supplied rate table carrying an as_of date and a source."
+  },
+  "gates": [
+    {
+      "gate_id": "unit-tests",
+      "command": "python -m unittest scripts.tests.test_ai_usage",
+      "result": "pass",
+      "evidence_refs": ["usage-suite"],
+      "notes": "26 tests. The whole suite is 712 and green."
+    },
+    {
+      "gate_id": "mutation-test",
+      "command": "mutate each guard and require the suite to fail",
+      "result": "pass",
+      "evidence_refs": ["mutation-run"],
+      "notes": "Six mutations, six bites, unmutated control green. The first run found one dead guard: the absent-quota test omitted rate_limits entirely, so the branch where rate_limits exists without a primary window was never exercised. A test for that case was added and the mutation then bit."
+    },
+    {
+      "gate_id": "real-data-run",
+      "command": "ai usage show",
+      "result": "pass",
+      "evidence_refs": ["live-run"],
+      "notes": "684 sessions on this machine: Claude 24,276 turns measured, Codex 99,421 turns measured with quota plan=pro used=52%, Antigravity 3,677 steps estimated. Not a fixture."
+    },
+    {
+      "gate_id": "architecture-ceilings",
+      "command": "python -m unittest scripts.tests.test_ai_architecture",
+      "result": "pass",
+      "evidence_refs": ["architecture-suite"],
+      "notes": "usage.py 298, usage_sources.py 259, test_ai_usage.py 305, ai_cli.py 388: all under the 600/700/400 ceilings."
+    },
+    {
+      "gate_id": "control-plane-health",
+      "command": "ai doctor; ai docs lint",
+      "result": "pass",
+      "evidence_refs": ["doctor-run"],
+      "notes": "doctor 12 passed 0 failures; docs lint 0 errors 0 warnings."
+    }
+  ],
+  "evidence_refs": [
+    "usage-suite",
+    "mutation-run",
+    "live-run",
+    "architecture-suite",
+    "doctor-run"
+  ],
+  "context_items": [
+    {
+      "context_item_id": "t01-word-estimation-does-not-work",
+      "type": "decision",
+      "blocking": false,
+      "severity": "high",
+      "summary": "Estimating tokens from word or character counts was researched and rejected as the fallback.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "resolved",
+      "resolution": "Measured on real sessions: input outweighs output by 300-640x, 96-99% of input is cached, and 22-39% of output is reasoning that never appears as text. Agent cost is context re-read per turn, which no word count predicts. The fallback estimates per STEP from a calibration learned off tools that do measure."
+    },
+    {
+      "context_item_id": "t01-claude-turn-dedup",
+      "type": "finding",
+      "blocking": true,
+      "severity": "high",
+      "summary": "Claude Code writes one assistant turn as several records that each repeat the turn's usage; summing records triples the count.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "resolved",
+      "resolution": "The collector groups by assistant message id. A regression test builds a three-record turn with output_tokens=744 and asserts 744, and removing the dedup fails it."
+    },
+    {
+      "context_item_id": "t01-antigravity-unmeasurable",
+      "type": "limitation",
+      "blocking": false,
+      "severity": "medium",
+      "summary": "Antigravity records no token, quota, or cost data anywhere on disk.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "resolved",
+      "resolution": "Seven SQLite stores under ~/.gemini were checked and none carries a matching column; conversations are protobuf blobs and the state file is onboarding flags. Steps are the only countable unit, so the estimate is per-step and labelled."
+    },
+    {
+      "context_item_id": "t01-step-turn-equivalence-unverified",
+      "type": "risk",
+      "blocking": false,
+      "severity": "medium",
+      "summary": "The estimate treats one Antigravity step as one turn, and that equivalence is not established.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "open",
+      "resolution": "Not laundered into a single number: the estimate is reported as a 3x range around the midpoint with the assumption printed beside it. Claude writes roughly three records per turn, so a step is plausibly finer and the true figure likely sits below the midpoint."
+    },
+    {
+      "context_item_id": "t01-local-profile-was-not-ignored",
+      "type": "finding",
+      "blocking": true,
+      "severity": "medium",
+      "summary": "routing-taxonomy.md calls the checkout-local profile Git-ignored, but nothing ignored it.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "resolved",
+      "resolution": "`.ai/.local/` is now in .gitignore, verified with git check-ignore. This mattered before billing data existed and matters more now: one `git add -A` after `ai tools configure` would have committed plan and rate detail."
+    },
+    {
+      "context_item_id": "t01-private-formats-will-drift",
+      "type": "risk",
+      "blocking": false,
+      "severity": "medium",
+      "summary": "Every source read here is a private on-disk format that no vendor documents or guarantees.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "open",
+      "resolution": "Each collector validates the shape it finds and returns None rather than a guess, so a format change degrades to unknown instead of to a wrong number. Codex usage is located by key search rather than by a fixed path so an intermediate rename does not break it."
+    },
+    {
+      "context_item_id": "t01-no-review-performed",
+      "type": "observation",
+      "blocking": false,
+      "severity": "info",
+      "summary": "The owner waived independent review for this task, so no QA event exists.",
+      "source_receipt_id": "task_01_per_task_usage_accounting-executor-1",
+      "state": "open",
+      "resolution": "The task therefore has no valid closeout and stays in queue/. Acceptance is not closeout, and a fabricated QA event would be worse than an absent one."
+    }
+  ],
+  "notes": [
+    "Rates are deliberately absent from the code. A price recalled by a model has a short half-life, and a wrong rate that looks authoritative is worse than no rate, so the table is user-supplied and rejected without an as_of date and a source.",
+    "The four token classes stay separate from collection through to the report. A pricing test uses a 99% cached shape and asserts 51.45 rather than the ~309 a blended input rate would produce.",
+    "The first version of the network-boundary guard matched the word 'socket' in the module's own docstring. It now parses imports with ast, and a companion test proves the guard still fails on a real network import."
+  ],
+  "knowledge_to_capture": [
+    "Claude Code repeats one turn's usage across every record of that turn; group by message id before summing anything.",
+    "Codex records both token usage and subscription quota (plan_type, used_percent, window_minutes, resets_at) in its rollout files; Claude Code records tokens but no quota; Antigravity records neither.",
+    "In agent sessions, cached input is 96-99% of all input volume, so any cost model that blends token classes is wrong by roughly an order of magnitude."
+  ]
+}

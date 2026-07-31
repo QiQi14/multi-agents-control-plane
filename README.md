@@ -159,7 +159,30 @@ explicit and reasoned (`root-workspace-manifest-changed`, `affected-set-reached-
 runs under a cross-process lock with heartbeats, and fails closed. Raw tool output is never
 canonical evidence; the versioned record is.
 
-### 9. Documentation you can read, and reports you can send
+### 9. Know what a task cost
+
+`ai usage show` reports what agent work consumed, reading only the records each tool already writes
+on this machine. Nothing here touches the network, a credential, or account state.
+
+```bash
+ai usage show --here
+```
+
+Tools differ in what they record, and the report says which is which rather than smoothing it over:
+Claude Code reports tokens, Codex reports tokens *and* subscription quota, Antigravity reports
+neither and is shown as a labelled estimate range. A tool that cannot be measured reads **unknown**,
+never zero, because a zero quietly understates a total.
+
+The four token classes are priced separately. In real agent sessions 96-99% of input is *cached*
+input, billed at a fraction of the input rate, so a single blended token price is wrong by roughly
+an order of magnitude. Reasoning tokens get their own line: they are billed and never appear as text.
+
+Rates are yours, in `.ai/.local/billing.json`, and each one must carry an `as_of` date and a source.
+None ship with the plane — a price is a fact with a short shelf life, and a stale rate that looks
+authoritative is worse than no rate at all. Usage is advisory throughout: it never changes which tool
+a task routes to.
+
+### 10. Documentation you can read, and reports you can send
 
 `ai docs build` projects every rule, workflow, agent, skill, project document, and task into a
 static, self-contained site: rendered pages, typed relations, backlinks, per-document and global
@@ -384,6 +407,7 @@ and the installer warns you before that happens. Move anything hand-written into
 | Tasks | `tasks`, `task show`, `dispatch`, `review`, `qa`, `merge`, `learn`, `archive` |
 | Verification | `verify`, `cargo`, `cargo-cache`, `impact` |
 | Extensions | `ext list`, `ext run`, `tools list`, `tools configure` |
+| Usage | `usage show` |
 | Skill packs | `skills list`, `skills add`, `skills remove` |
 | Documentation | `docs build`, `docs sync`, `docs export`, `docs lint`, `docs search`, `docs stats`, `docs graph` |
 | Hand-authored specs | `blueprint init`, `blueprint build` |

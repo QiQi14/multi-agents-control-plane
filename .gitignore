@@ -26,3 +26,9 @@ _site/
 # The inlined Mermaid runtime makes each one ~5 MB, and the spec plus evidence PNGs are the
 # real source of truth.
 examples/*.html
+
+# Checkout-local machine state: which tools this checkout may use, and how it is billed.
+# `routing-taxonomy.md` calls this profile Git-ignored, and until now nothing made that true --
+# one `git add -A` after `ai tools configure` would have committed it. It now also holds plan and
+# rate data, so an accidental commit publishes billing detail, not just a tool preference.
+.ai/.local/

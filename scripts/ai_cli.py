@@ -218,6 +218,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     skills_module.add_skills_parser(sub)
 
+    from scripts.ai_plane.usage import add_usage_parser
+    add_usage_parser(sub)
+
     dispatch = sub.add_parser("dispatch", help="Render dispatch prompt for an executor")
     dispatch.add_argument("task_id", help="Task ID or directory name")
     dispatch.add_argument("--tool", choices=config_module.TOOLS)
@@ -348,6 +351,10 @@ def main(argv: list[str] | None = None) -> None:
         cmd_task_show(args)
     elif args.command == "ext":
         cmd_ext(args)
+    elif args.command == "usage":
+        from scripts.ai_plane.usage import cmd_usage_show
+
+        cmd_usage_show(args, die=die)
     elif args.command == "skills":
         skills_module.cmd_skills(args, root=ROOT, ai=AI, die=die)
     elif args.command == "dispatch":
