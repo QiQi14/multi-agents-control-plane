@@ -180,9 +180,16 @@ ai docs export task_07_payment_retry
 It reads the task's own contract, receipts, and evidence, and writes one self-contained HTML report
 with diagrams inlined and no runtime dependency. Attach it to an MR, or email it.
 
+**Reach for it after every task, not only when sending one out.** `ai docs build` reprojects the
+whole corpus, so its cost grows with the repository — on a mature one that is minutes and a site
+measured in hundreds of megabytes. Exporting a single task is effectively instant, because it reads
+only that task's record. If you find yourself waiting for several tasks to pile up before rebuilding
+just to read your own finished work, export each one instead and keep the full build for when you
+actually want the browsable corpus: cross-references, relation graphs, search.
+
 Both are fully deterministic: stdlib parse → validate → render, no model in the pipeline and zero
-token cost. The difference between them is **audience**, not content — which is why exporting a
-task is one command rather than a separate authoring workflow.
+token cost. The difference between them is **audience and scope**, not content — which is why
+exporting a task is one command rather than a separate authoring workflow.
 
 When the judgement content *is* the point — a review specification a human settles rather than
 derives — `ai blueprint init` and `ai blueprint build` remain the path for a hand-authored spec.
