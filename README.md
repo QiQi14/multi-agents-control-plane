@@ -183,9 +183,20 @@ with diagrams inlined and no runtime dependency. Attach it to an MR, or email it
 **Reach for it after every task, not only when sending one out.** `ai docs build` reprojects the
 whole corpus, so its cost grows with the repository — on a mature one that is minutes and a site
 measured in hundreds of megabytes. Exporting a single task is effectively instant, because it reads
-only that task's record. If you find yourself waiting for several tasks to pile up before rebuilding
-just to read your own finished work, export each one instead and keep the full build for when you
-actually want the browsable corpus: cross-references, relation graphs, search.
+only that task's record.
+
+To make a finished task current *in the reader* rather than as a separate file, refresh the task
+data in place:
+
+```bash
+ai docs sync
+```
+
+It reprojects the task truth system and rewrites the reader payload through the same writer a full
+build uses, so the task pages are exactly what a full build would have produced — on a repository
+with a few hundred tasks, seconds against minutes. Documents, relation graphs, and the search index
+are left as they were; run the full build when one of those changed. The learn workflow closes with
+this step, so a completed task is readable without anyone asking for a rebuild.
 
 Both are fully deterministic: stdlib parse → validate → render, no model in the pipeline and zero
 token cost. The difference between them is **audience and scope**, not content — which is why
@@ -374,7 +385,7 @@ and the installer warns you before that happens. Move anything hand-written into
 | Verification | `verify`, `cargo`, `cargo-cache`, `impact` |
 | Extensions | `ext list`, `ext run`, `tools list`, `tools configure` |
 | Skill packs | `skills list`, `skills add`, `skills remove` |
-| Documentation | `docs build`, `docs export`, `docs lint`, `docs search`, `docs stats`, `docs graph` |
+| Documentation | `docs build`, `docs sync`, `docs export`, `docs lint`, `docs search`, `docs stats`, `docs graph` |
 | Hand-authored specs | `blueprint init`, `blueprint build` |
 
 ---

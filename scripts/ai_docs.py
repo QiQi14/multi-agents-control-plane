@@ -1966,6 +1966,8 @@ def add_docs_parser(sub: Any) -> None:
 
     from scripts.ai_plane.docs_export import add_docs_export_parser
     add_docs_export_parser(docs_sub)
+    from scripts.ai_plane.docs_sync import add_docs_sync_parser
+    add_docs_sync_parser(docs_sub)
 
 
 def project_intelligence_declared() -> bool:
@@ -1992,6 +1994,11 @@ def cmd_docs(args: Any) -> None:
         from scripts.ai_plane.docs_export import cmd_docs_export
         from scripts.ai_plane.utils import die as _die
         cmd_docs_export(args, die=_die)
+    elif cmd == "sync":
+        from scripts.ai_plane.docs_sync import cmd_docs_sync
+        from scripts.ai_plane.utils import die as _die
+
+        cmd_docs_sync(args, die=_die)
     elif cmd == "lint":
         result = cmd_docs_lint()
         if result:

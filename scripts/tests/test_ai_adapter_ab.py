@@ -160,6 +160,10 @@ _CONTENT_DRIFT_SOURCES = (
     ".ai/agents/reviewer.md",
     ".ai/project/principles.md",
     ".ai/project/routing-taxonomy.md",
+    # The learn workflow gained the reader-refresh closing step. It is copied verbatim by the
+    # workflows transform into every vendor adapter, so without its current bytes the base renders
+    # the older text and the comparison reports a renderer difference that is really a content edit.
+    ".ai/workflows/learn.md",
 )
 
 # This generated file was already a protected local customization at the current Task 195D base:

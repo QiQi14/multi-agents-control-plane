@@ -198,7 +198,7 @@
     {
       "command": "ai sync",
       "path": ".agents/workflows/learn.md",
-      "sha256": "44854fa080600d968a3c943d8aa530f33ae0301446226eeefb85c6439f505477"
+      "sha256": "bc2f8f10f580a322ac24cac269189aeb9173be75981f151fe6a035493e09d935"
     },
     {
       "command": "ai sync",
@@ -273,7 +273,7 @@
     {
       "command": "ai sync",
       "path": ".claude/workflows/learn.md",
-      "sha256": "44854fa080600d968a3c943d8aa530f33ae0301446226eeefb85c6439f505477"
+      "sha256": "bc2f8f10f580a322ac24cac269189aeb9173be75981f151fe6a035493e09d935"
     },
     {
       "command": "ai sync",

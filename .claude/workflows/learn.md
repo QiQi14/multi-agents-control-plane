@@ -21,6 +21,22 @@ After QA, capture durable knowledge in typed memory — and, at a feature close,
    `.ai/templates/project-doc/*.md.tmpl` variant and author every schema-v2 field. Do not convert
    inferred prose, links, or filenames into authority or publication metadata.
 
+8. **Refresh the reader once the fold is valid.** A closed task whose record is not in the projected
+   site is unreadable to anyone not reading raw YAML, so the closing agent runs:
+
+   ```bash
+   ai docs sync
+   ```
+
+   It replaces the reader's task data in place in seconds. `ai docs build` reprojects the entire
+   corpus — every document, relation graph, and the search index — and its cost grows with the
+   repository; batching several finished tasks to make a full rebuild feel worthwhile is the habit
+   this step exists to remove. Run the full build when something outside the task set changed, which
+   is exactly the doc reconciliation in step 6.
+
+   To hand the task to someone with no checkout, `ai docs export <task_id>` writes one
+   self-contained HTML report from the same record.
+
 ## Where knowledge goes
 
 `.ai/memory/` is for the agents (traps, decisions, lessons). `project/docs/` is for humans and may
