@@ -17,12 +17,19 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-LIFECYCLE_FILL = {
-    "queue": "#2d3748",
-    "active": "#2b6cb0",
-    "done": "#276749",
-    "archive": "#4a5568",
+# The reader owns the palette. A lifecycle's colour is `hsl(var(--h-KEY) 62% var(--node-l))`, the
+# same expression its facet swatches and chip dots use, so a node here is the exact colour the task
+# list already taught the reader to associate with that state. The keys are the reader's, which are
+# past tense (`queued`, `archived`) where the folder names are not.
+LIFECYCLE_TOKEN = {
+    "queue": "queued",
+    "active": "active",
+    "done": "done",
+    "archive": "archived",
 }
+# Fallback hues, used only when the SVG is opened on its own with no reader stylesheet in scope.
+# They mirror app.css so a standalone file still reads correctly rather than falling back to black.
+LIFECYCLE_HUE = {"queued": 222, "active": 33, "done": 152, "archived": 240}
 LIVE_LIFECYCLES = ("queue", "active", "done")
 
 NODE_WIDTH = 210
@@ -113,16 +120,26 @@ def render_svg(tasks: list[dict[str, Any]], *, lifecycles: tuple[str, ...] = LIV
     width = MARGIN * 2 + max(len(v) for v in layers.values()) * (NODE_WIDTH + GAP_X) - GAP_X
     height = MARGIN * 2 + (max(layers) + 1) * (NODE_HEIGHT + GAP_Y) - GAP_Y
 
+    dots = "".join(
+        f".d--{token}{{fill:hsl(var(--h-{token},{hue}) 62% var(--node-l,46%))}}"
+        for token, hue in LIFECYCLE_HUE.items()
+    )
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Task dependency hierarchy: {len(nodes)} tasks, {len(edges)} dependencies">',
         '<defs><marker id="dep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" '
         'markerHeight="6" orient="auto-start-reverse">'
-        '<path d="M 0 0 L 10 5 L 0 10 z" fill="#8b93a1"/></marker></defs>',
-        '<style>.n{stroke:#1a202c;stroke-width:1}.t{fill:#edf2f7;font-family:system-ui,sans-serif;'
-        'font-size:11px}.e{stroke:#8b93a1;stroke-width:1.4;fill:none;marker-end:url(#dep)}</style>',
-        f'<rect width="{width}" height="{height}" fill="#12151b"/>',
+        '<path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line-strong,#c3c9d4)"/></marker></defs>',
+        # Every value defers to a reader token with a fallback, so the same file is correct inside
+        # the reader (light or dark, following its theme) and correct opened on its own.
+        "<style>"
+        ".n{fill:var(--surface,#fff);stroke:var(--line,#d9dde5);stroke-width:1}"
+        ".t{fill:var(--ink,#1c2230);font-family:var(--font-ui,system-ui,sans-serif);"
+        "font-size:var(--step--1,12.5px)}"
+        ".e{stroke:var(--line-strong,#c3c9d4);stroke-width:1.4;fill:none;marker-end:url(#dep)}"
+        f"{dots}</style>",
+        f'<rect width="{width}" height="{height}" fill="var(--canvas,#f7f6f3)"/>',
     ]
     for source, target in edges:
         x1, y1 = position[source]
@@ -133,12 +150,14 @@ def render_svg(tasks: list[dict[str, Any]], *, lifecycles: tuple[str, ...] = LIV
             f'{x2 + NODE_WIDTH // 2} {y2 - GAP_Y // 2}, {x2 + NODE_WIDTH // 2} {y2}"/>')
     for node in sorted(nodes):
         x, y = position[node]
-        fill = LIFECYCLE_FILL.get(str(nodes[node].get("lifecycle")), "#4a5568")
+        token = LIFECYCLE_TOKEN.get(str(nodes[node].get("lifecycle")), "queued")
         parts.append(
             f'<rect class="n" x="{x}" y="{y}" width="{NODE_WIDTH}" height="{NODE_HEIGHT}" '
-            f'rx="5" fill="{fill}"><title>{escape(node)}</title></rect>')
+            f'rx="6"><title>{escape(node)}</title></rect>')
         parts.append(
-            f'<text class="t" x="{x + 10}" y="{y + 21}">{escape(_label(nodes[node], node))}</text>')
+            f'<circle class="d--{token}" cx="{x + 14}" cy="{y + NODE_HEIGHT // 2}" r="3.5"/>')
+        parts.append(
+            f'<text class="t" x="{x + 25}" y="{y + 21}">{escape(_label(nodes[node], node))}</text>')
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 
@@ -161,26 +180,33 @@ def render_page(svg: str, counts: dict[str, int], scope: str) -> str:
     rather than the raw markup. A bare .svg would open as a file rather than as a view, so the task
     graph gets the same treatment: legend, counts, and a way back.
     """
+    # The reader's own stylesheet, so this page inherits its tokens, typography, light/dark theme
+    # and card language instead of restating a second visual system that drifts from it.
     swatches = "".join(
-        f'<span class="k"><i style="background:{LIFECYCLE_FILL[name]}"></i>{name}</span>'
-        for name in ("queue", "active", "done", "archive") if name in LIFECYCLE_FILL
+        f'<span class="chip"><i class="chip-dot" style="--h: var(--h-{token}, {hue})"></i>'
+        f"{escape(label)}</span>"
+        for label, token, hue in (
+            ("queued", "queued", 222), ("active", "active", 33),
+            ("done", "done", 152), ("archived", "archived", 240),
+        )
     )
     return (
-        '<!doctype html><meta charset="utf-8">'
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         "<title>Task dependency hierarchy</title>"
-        "<style>body{margin:0;background:#0d1016;color:#edf2f7;"
-        "font-family:system-ui,sans-serif}header{padding:16px 20px;border-bottom:1px solid #232936}"
-        "h1{font-size:16px;margin:0 0 6px}p{margin:0;font-size:12px;color:#9aa4b2}"
-        ".k{display:inline-flex;align-items:center;gap:6px;margin-right:14px;font-size:12px}"
-        ".k i{width:11px;height:11px;border-radius:3px;display:inline-block}"
-        "main{padding:20px;overflow:auto}a{color:#7fb3ff}</style>"
-        "<header><h1>Task dependency hierarchy</h1>"
-        f"<p>{counts['tasks']} task(s) &middot; {counts['dependencies']} dependency edge(s) "
-        f"&middot; {counts['layers']} layer(s) &middot; {counts['roots']} with nothing to wait on "
-        f"&middot; scope: {escape(scope)}</p>"
-        f"<p style='margin-top:8px'>{swatches}<a href='../index.html#/tasks'>&larr; Task contracts</a></p>"
-        f"</header><main>{svg}</main>\n"
+        '<link rel="stylesheet" href="../assets/app.css">'
+        '<link rel="stylesheet" href="../assets/production-delta.css">'
+        "<style>.graph-page{padding:var(--space-5)}"
+        ".graph-page main{overflow-x:auto;margin-top:var(--space-4)}"
+        ".graph-page .chip{margin-right:var(--space-3)}</style>"
+        '</head><body><div class="page graph-page">'
+        '<div class="section-head"><h2>Task dependency hierarchy</h2>'
+        f"<span class=\"hint\">{counts['tasks']} task(s) &middot; "
+        f"{counts['dependencies']} dependency edge(s) &middot; {counts['layers']} layer(s) &middot; "
+        f"{counts['roots']} with nothing to wait on &middot; scope: {escape(scope)}</span></div>"
+        f'<p class="rel-kind">{swatches}'
+        '<a class="btn" href="../index.html#/tasks">&larr; Task contracts</a></p>'
+        f"<main>{svg}</main></div></body></html>\n"
     )
 
 

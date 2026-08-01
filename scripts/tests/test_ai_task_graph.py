@@ -85,9 +85,19 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(2, svg.count('class="n"'))
         self.assertEqual(1, svg.count('class="e"'))
 
-    def test_lifecycle_selects_the_fill(self) -> None:
+    def test_lifecycle_selects_the_readers_own_colour_token(self) -> None:
+        # The reader owns the palette: a node must resolve the same hue token its facet swatch and
+        # chip dot use, not a second hex value that drifts from them.
         svg = task_graph.render_svg([task("a", lifecycle="done")])
-        self.assertIn(task_graph.LIFECYCLE_FILL["done"], svg)
+        self.assertIn('class="d--done"', svg)
+        self.assertIn("var(--h-done,152)", svg.replace(" ", ""))
+
+    def test_colours_fall_back_when_no_reader_stylesheet_is_in_scope(self) -> None:
+        # Opened on its own the file has no tokens, so every var() carries a fallback.
+        svg = task_graph.render_svg([task("a")])
+        for token in ("--surface,", "--ink,", "--line,", "--canvas,"):
+            with self.subTest(token=token):
+                self.assertIn(token, svg.replace(" ", ""))
 
     def test_output_is_byte_identical_for_the_same_corpus(self) -> None:
         # Deterministic output is what lets a generated file be committed and diffed.

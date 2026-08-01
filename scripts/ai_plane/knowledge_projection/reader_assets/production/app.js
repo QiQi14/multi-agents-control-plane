@@ -1210,7 +1210,247 @@
   }
 
   // ------------------------------------------------------------- TASK LIST
+  // Drawable task relations. Counts on this corpus: dependsOn 455, sliceRef 194,
+  // decomposedInto 27, slices 18, informedBy 15, parallelWith 13, blockedBy 1.
+  var TASK_LINKS = [
+    { key: 'dependsOn', label: 'depends on', on: true },
+    { key: 'blockedBy', label: 'blocked by', on: true },
+    { key: 'decomposedInto', label: 'decomposed into', on: true, reverse: true },
+    { key: 'slices', label: 'slices', on: false, reverse: true },
+    { key: 'sliceRef', label: 'slice of', on: false },
+    { key: 'informedBy', label: 'informed by', on: false },
+    { key: 'parallelWith', label: 'parallel with', on: false }
+  ];
+
+  var NO_TASK_LINKS = 'none';
+
+  // Every lifecycle is on by default, so there is nothing for an "all" button to do that turning
+  // the set back on does not already do -- and an "all" that is itself pressable alongside four
+  // states it contains reads as a fifth state. Selecting several at once is the real need: "what
+  // is queued or active" is one question, and a single-value filter could not ask it.
+  var TASK_LIFECYCLES = ['queued', 'active', 'done', 'archived'];
+  var NO_TASK_LIFECYCLES = 'none';
+
+  function activeTaskLifecycles(value) {
+    if (value === undefined || value === null || value === '') return TASK_LIFECYCLES.slice();
+    if (value === NO_TASK_LIFECYCLES) return [];
+    return String(value).split(',').filter(Boolean);
+  }
+
+  function toggleTaskLifecycle(value, key) {
+    var on = activeTaskLifecycles(value);
+    var at = on.indexOf(key);
+    if (at >= 0) on.splice(at, 1); else on.push(key);
+    if (!on.length) return NO_TASK_LIFECYCLES;
+    // A full set is the default, so store it as absent rather than as an explicit list: the URL
+    // stays clean and a later vocabulary change does not leave a stale list pinned in a bookmark.
+    return on.length === TASK_LIFECYCLES.length ? '' : on.join(',');
+  }
+
+  function defaultTaskLinks() {
+    return TASK_LINKS.filter(function (l) { return l.on; }).map(function (l) { return l.key; });
+  }
+
+  // A missing parameter means the default set; an explicit empty one means the reader turned
+  // every link off, which must stay off rather than silently reverting to the default.
+  function activeTaskLinks(value) {
+    if (value === undefined || value === null || value === '') return defaultTaskLinks();
+    // 'none' is a real selection, not an absent one. setQuery drops empty parameters, so an empty
+    // string cannot survive a round trip through the URL -- turning every link off reverted to the
+    // defaults on the next render, which reads as the toggles being ignored.
+    if (value === NO_TASK_LINKS) return [];
+    return String(value).split(',').filter(Boolean);
+  }
+
+  function toggleTaskLink(value, key) {
+    var on = activeTaskLinks(value);
+    var at = on.indexOf(key);
+    if (at >= 0) on.splice(at, 1); else on.push(key);
+    return on.length ? on.join(',') : NO_TASK_LINKS;
+  }
+
+  function taskViewSwitch(view) {
+    return '<div class="view-switch" role="group" aria-label="Task view" ' +
+      'style="margin-bottom:var(--space-4)">' +
+      ['library', 'graph'].map(function (key) {
+        return '<button type="button" data-task-view="' + key + '" aria-pressed="' +
+          (view === key) + '">' + (key === 'library' ? 'Library' : 'Graph') + '</button>';
+      }).join('') + '</div>';
+  }
+
+  function bindTaskViewSwitch() {
+    main.querySelectorAll('[data-task-view]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setQuery({ view: button.getAttribute('data-task-view') === 'graph' ? 'graph' : '' });
+      });
+    });
+  }
+
+  // Task nodes for the shared graph engine. Type is the lifecycle, so the engine's existing
+  // `--h-<type>` colour lookup resolves the very hues the task facets already use.
+  function taskGraphDataset() {
+    var byId = {};
+    DATA.tasks.forEach(function (task) { byId[task.id] = task; });
+    var degree = {};
+    var edges = [];
+    // `blocks` is deliberately absent: it is the inverse of dependsOn, so drawing both would put
+    // two lines between the same pair and double every count. One direction, stated once.
+    TASK_LINKS.forEach(function (link) {
+      DATA.tasks.forEach(function (task) {
+        var related = (task.rel || {})[link.key];
+        if (!related) return;
+        (Array.isArray(related) ? related : [related]).forEach(function (other) {
+          var target = typeof other === 'string' ? other : (other && other.id);
+          if (!target || !byId[target] || target === task.id) return;
+          var pair = link.reverse ? [task.id, target] : [target, task.id];
+          edges.push({ source: pair[0], target: pair[1], kind: link.key,
+                       type: 'depends_on', provenance: 'authored' });
+          degree[target] = (degree[target] || 0) + 1;
+          degree[task.id] = (degree[task.id] || 0) + 1;
+        });
+      });
+    });
+    return {
+      nodes: DATA.tasks.map(function (task) {
+        return { id: task.id, title: task.title || task.id, type: task.lifecycle,
+                 degree: degree[task.id] || 0, group: task.featureKey || '' };
+      }),
+      edges: edges,
+      types: ['queued', 'active', 'done', 'archived'],
+      edgeVisible: function (edge, f) { return activeTaskLinks(f.links).indexOf(edge.kind) >= 0; },
+      typeColour: {
+        queued: 'hsl(var(--h-queued, 222) 78% 58%)',
+        active: 'hsl(var(--h-active, 33) 92% 55%)',
+        done: 'hsl(var(--h-done, 152) 70% 42%)',
+        archived: 'hsl(var(--h-archived, 240) 12% 58%)'
+      },
+      corpusOf: function () { return ''; },
+      onSelect: function (id) { renderTaskGraphReader(id); },
+      matches: function (node, filters) {
+        var task = byId[node.id];
+        if (!task) return false;
+        if (activeTaskLifecycles(filters.life).indexOf(task.lifecycle) < 0) return false;
+        var terms = tokens(filters.q || '');
+        if (terms.length && scoreTask(task, terms) <= 0) return false;
+        return true;
+      }
+    };
+  }
+
+  function renderTaskGraphReader(id) {
+    var host = document.getElementById('graph-reader');
+    if (!host) return;
+    var task = DATA.tasks.filter(function (t) { return t.id === id; })[0];
+    if (!task) {
+      host.innerHTML =
+        '<div class="placeholder"><p><strong>Select a task.</strong></p>' +
+        '<p>Click any node to read its contract here, and to see what it waits on and what waits ' +
+        'on it. Drag a node to reposition it, drag the background to pan, scroll to zoom.</p></div>';
+      return;
+    }
+    var rel = task.rel || {};
+    function list(label, ids) {
+      if (!ids || !ids.length) return '';
+      return '<div style="margin-top:var(--space-3)"><strong>' + label + '</strong>' +
+        '<ul class="truth-list">' + ids.map(function (x) {
+          return '<li><a href="' + buildHash('task', x, {}) + '">' + esc(x) + '</a></li>';
+        }).join('') + '</ul></div>';
+    }
+    host.innerHTML =
+      '<article class="card" style="padding:var(--space-4)">' +
+        '<h3>' + esc(task.title || task.id) + '</h3>' +
+        '<p class="rel-kind">' + esc(task.lifecycleLabel || task.lifecycle) + '</p>' +
+        '<dl class="truth-kv">' +
+          '<div><dt>Id</dt><dd>' + esc(task.id) + '</dd></div>' +
+          (task.featureLabel
+            ? '<div><dt>Feature</dt><dd>' + esc(task.featureLabel) + '</dd></div>' : '') +
+        '</dl>' +
+        list('Waits on', rel.dependsOn) +
+        list('Waited on by', rel.blocks) +
+        '<p style="margin-top:var(--space-4)">' +
+          '<a class="btn" href="' + buildHash('task', task.id, {}) + '">Open task</a></p>' +
+      '</article>';
+  }
+
+  function screenTasksGraph() {
+    var sel = state.query.sel || '';
+    var life = state.query.life || '';
+    var on = activeTaskLinks(state.query.links);
+    var lifeOn = activeTaskLifecycles(state.query.life);
+    var dataset = taskGraphDataset();
+    main.innerHTML =
+      '<div class="page">' +
+        '<div class="section-head"><h2>Task contracts</h2>' +
+        '<span class="hint">' + dataset.nodes.length + ' tasks, ' + dataset.edges.length +
+        ' dependency links. Drag a node, drag the background to pan, scroll to zoom.</span></div>' +
+        taskViewSwitch('graph') +
+        '<div class="graph-screen">' +
+          '<div class="graph-canvas-wrap" id="graph-wrap">' +
+            '<canvas aria-label="Task dependency graph" role="img"></canvas>' +
+            '<div class="graph-controls">' +
+              '<div class="panel">' +
+                '<button class="icon-btn" type="button" data-graph="fit">Fit</button>' +
+                '<button class="icon-btn" type="button" data-graph="in" aria-label="Zoom in">+</button>' +
+                '<button class="icon-btn" type="button" data-graph="out" aria-label="Zoom out">-</button>' +
+              '</div>' +
+              '<div class="panel graph-search-panel">' +
+                '<label class="sr-only" for="graph-q">Search tasks</label>' +
+                '<input id="graph-q" type="search" placeholder="Search tasks..." value="' +
+                esc(state.query.q || '') + '">' +
+              '</div>' +
+              '<div class="panel">' +
+                '<span class="rel-kind">Lifecycle</span>' +
+                TASK_LIFECYCLES.map(function (k) {
+                  return '<button class="icon-btn" type="button" data-life="' + k +
+                    '" aria-pressed="' + (lifeOn.indexOf(k) >= 0) + '">' + k + '</button>';
+                }).join('') +
+              '</div>' +
+              '<div class="panel">' +
+                '<span class="rel-kind">Links</span>' +
+                TASK_LINKS.map(function (link) {
+                  return '<button class="icon-btn" type="button" data-link="' + link.key +
+                    '" aria-pressed="' + (on.indexOf(link.key) >= 0) + '">' +
+                    esc(link.label) + '</button>';
+                }).join('') +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<aside class="graph-reader" id="graph-reader"></aside>' +
+        '</div>' +
+      '</div>';
+
+    graph.init(document.getElementById('graph-wrap'), sel,
+      { q: state.query.q || '', life: life, links: on.length ? on.join(',') : NO_TASK_LINKS }, dataset);
+    renderTaskGraphReader(sel);
+
+    bindTaskViewSwitch();
+    main.querySelectorAll('[data-graph]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var action = button.getAttribute('data-graph');
+        if (action === 'fit') graph.fit();
+        if (action === 'in') graph.zoom(1.25);
+        if (action === 'out') graph.zoom(1 / 1.25);
+      });
+    });
+    main.querySelectorAll('[data-link]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setQuery({ links: toggleTaskLink(state.query.links, button.getAttribute('data-link')) });
+      });
+    });
+    main.querySelectorAll('[data-life]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setQuery({ life: toggleTaskLifecycle(state.query.life,
+          button.getAttribute('data-life')) });
+      });
+    });
+    var search = main.querySelector('#graph-q');
+    if (search) {
+      search.addEventListener('input', function () { setQuery({ q: search.value }); });
+    }
+  }
+
   function screenTasks() {
+    if (state.query.view === 'graph') { screenTasksGraph(); return; }
     var q = state.query.q || '';
     var terms = tokens(q);
     var life = state.query.life || '';
@@ -1354,10 +1594,10 @@
       '<div class="page">' +
         '<div class="section-head"><h2>Task contracts</h2>' +
         '<span class="hint">Every discoverable task contract, across current and historical lifecycle states</span></div>' +
-        // The dependency hierarchy is generated beside the document graphs but had no entry point,
-        // so the one structure this screen is about -- what waits on what -- was unreachable.
-        '<p class="rel-kind"><a class="btn" href="graphs/graph-tasks.html">◈ Dependency hierarchy</a>' +
-        ' <span>Which task waits on which, laid out by depth.</span></p>' +
+        // Two modes, the same pair the documents surface offers: the list answers "which
+        // tasks exist", the graph answers "what is this waiting on". A static picture could
+        // not do the second -- you cannot follow a chain you are unable to select.
+        taskViewSwitch('library') +
         '<div class="catalog">' + facets +
         '<div>' +
           '<div class="toolbar">' +
@@ -1386,6 +1626,10 @@
         '</div></div></div>';
 
     wireCatalog('taskq', 'tasksort');
+    // The library screen renders the same toggle the graph screen does, so it has to bind
+    // it too. Rendering a control without a listener is worse than omitting it: the button
+    // looks live and does nothing.
+    bindTaskViewSwitch();
     var featureSelect = document.getElementById('featsel');
     if (featureSelect) {
       featureSelect.addEventListener('change', function () { setQuery({ feature: featureSelect.value }); });
@@ -1718,6 +1962,7 @@
   // ------------------------------------------------------------------ GRAPH
   var graph = (function () {
     var nodes = null, edges = null, canvas = null, ctx = null, raf = null;
+    var source = null;
     var view = { x: 0, y: 0, k: 1 };
     var drag = null, panning = null, hover = null, selected = null;
     var colours = {};
@@ -1730,8 +1975,19 @@
       probe.style.display = 'none';
       document.body.appendChild(probe);
       var out = { types: {} };
-      Object.keys(TYPE_LABEL).concat(['queued']).forEach(function (t) {
-        probe.style.color = 'hsl(var(--h-' + t + ', 220) 62% var(--node-l))';
+      // The dataset names its own node types. This list was the document types plus a hardcoded
+      // 'queued', so every other lifecycle -- active, done, archived, which is most of the task
+      // corpus -- missed the lookup and fell through to the default hue. The result was a graph
+      // that drew 205 of 236 tasks in the same grey-blue and looked like it had no colouring.
+      var palette = (source && source.types) || Object.keys(TYPE_LABEL).concat(['queued']);
+      palette.forEach(function (t) {
+        // A dataset may state how a type is coloured, not merely that it exists. Lifecycle needs
+        // this: queued and archived sit at hues 222 and 240, near-identical at node size, and
+        // archived is 85% of the task corpus -- so reading the tokens straight produced a wall of
+        // one blue. Finished work recedes; live work keeps full strength.
+        var expr = (source && source.typeColour && source.typeColour[t]) ||
+          'hsl(var(--h-' + t + ', 220) 62% var(--node-l))';
+        probe.style.color = expr;
         out.types[t] = getComputedStyle(probe).color;
       });
       var style = getComputedStyle(document.documentElement);
@@ -1744,24 +2000,42 @@
       colours = out;
     }
 
-    function init(container, initialSelection, initialFilters) {
+    // A dataset lets the same physics, hit-testing, drag, zoom and selection serve any node set.
+    // Documents were the only caller for a long time, so their shape was inlined here; tasks want
+    // exactly this engine over a different corpus, and copying it would have been two simulations
+    // to keep in step. Omitting the argument keeps the document behaviour byte-for-byte.
+    function documentDataset() {
+      return {
+        nodes: DATA.graph.nodes,
+        corpusOf: function (n) { return docCorpus(docById[n.id] || n); },
+        edges: allGraphEdges.map(function (e) {
+          return { source: e.source, target: e.target, type: e.type,
+            provenance: e.provenance, bridge: isBridgeEdge(e) };
+        })
+      };
+    }
+
+    function init(container, initialSelection, initialFilters, dataset) {
       filters = initialFilters;
+      source = dataset || documentDataset();
       // Deterministic starting positions: a golden-angle spiral in registry
       // order. Same snapshot -> same layout, every time, no seeded RNG needed.
-      nodes = DATA.graph.nodes.map(function (n, i) {
+      nodes = source.nodes.map(function (n, i) {
         var angle = i * 2.399963;
         var radius = 26 * Math.sqrt(i + 1);
         return {
           id: n.id, title: n.title, type: n.type, degree: n.degree, group: n.group,
-          corpus: docCorpus(docById[n.id] || n),
+          corpus: source.corpusOf ? source.corpusOf(n) : '',
           x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, vx: 0, vy: 0
         };
       });
       var index = {};
       nodes.forEach(function (n) { index[n.id] = n; });
-      edges = allGraphEdges.map(function (e) {
+      edges = source.edges.map(function (e) {
+        // `kind` carries the dataset's own edge classification. Dropping it here silently made
+        // every dataset edge filter compare against undefined, which drew no edges at all.
         return { s: index[e.source], t: index[e.target], type: e.type, prov: e.provenance,
-          bridge: isBridgeEdge(e) };
+          kind: e.kind, bridge: !!e.bridge };
       }).filter(function (e) { return e.s && e.t; });
 
       canvas = container.querySelector('canvas');
@@ -1859,6 +2133,10 @@
     function visible(node) {
       if (filters.corpus && node.corpus !== filters.corpus && !bridgeNeighbour(node)) return false;
       if (filters.type && node.type !== filters.type) return false;
+      // The dataset owns what its own nodes mean, so search and facet filtering ask it rather than
+      // assuming every node is a document. Without a dataset match function a node stays visible:
+      // a corpus that cannot answer a filter must not silently empty the canvas.
+      if (source && source.matches) return source.matches(node, filters);
       var doc = docById[node.id];
       if (filters.group && (!doc || doc.group !== filters.group)) return false;
       if (filters.status && (!doc || doc.status !== filters.status)) return false;
@@ -1867,6 +2145,10 @@
       return true;
     }
     function visibleEdge(edge) {
+      // A dataset may filter its own edges. Documents pick one provenance at a time; tasks carry
+      // several relation kinds at once and need them independently on or off, which a single-value
+      // match cannot express.
+      if (source && source.edgeVisible && !source.edgeVisible(edge, filters)) return false;
       if (filters.prov && edge.prov !== filters.prov) return false;
       if (edge.bridge) {
         if (!filters.bridges) return false;
@@ -2090,7 +2372,9 @@
         for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id) selected = nodes[i];
       }
       draw();
-      renderGraphReader(id);
+      // The dataset owns its own detail panel. Calling renderGraphReader by name meant a non
+      // document corpus could never receive its own selection.
+      (source && source.onSelect ? source.onSelect : renderGraphReader)(id);
     }
 
     function setSelection(id) {

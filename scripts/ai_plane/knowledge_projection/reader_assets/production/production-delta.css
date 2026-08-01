@@ -586,3 +586,48 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Toggle state, made visible.
+   `.icon-btn` styled only its base and hover, so a pressed filter looked exactly like an unpressed
+   one: seven independent link toggles all read as the same button and you had to click and watch
+   the canvas to learn which were on. State is now carried by fill and weight, not by the accessible
+   attribute alone -- and a checkmark rather than colour alone, so it survives a colour-blind read. */
+.graph-controls .icon-btn[aria-pressed] {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.graph-controls .icon-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.graph-controls .icon-btn[aria-pressed="true"]::before {
+  content: "✓ ";
+  font-weight: 700;
+}
+
+.graph-controls .icon-btn[aria-pressed="false"] {
+  opacity: .72;
+}
+
+.graph-controls .icon-btn[aria-pressed="false"]:hover {
+  opacity: 1;
+  border-color: var(--line-strong);
+}
+
+/* The group label sits above its row rather than inline, so a wrapped row of seven toggles still
+   reads as one control instead of trailing off from a word. */
+.graph-controls .panel > .rel-kind {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-1);
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 10.5px;
+}
