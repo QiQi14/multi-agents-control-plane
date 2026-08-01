@@ -7,8 +7,8 @@ work, and who may approve a merge. A defect in any of that is a security defect,
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | Yes |
-| < 0.1 | No |
+| 0.2.x | Yes |
+| < 0.2 | No |
 
 Pre-1.0, fixes land on the latest release. There is no long-term support branch yet.
 

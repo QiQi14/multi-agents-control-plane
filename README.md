@@ -26,14 +26,30 @@ approval.
 
 ## Status
 
-**v0.2.0.** The core was built and exercised across internal repositories before being extracted,
+**v0.2.1.** The core was built and exercised across internal repositories before being extracted,
 and every gate below runs in CI, but the public CLI and the artifact schemas are pre-1.0 and may
 still change between minor versions.
 
+New in 0.2.1:
+
+- `ai usage build` puts the usage report in the reader, on the Overview screen. It is deliberately
+  separate from `ai docs build`: the site build is a deterministic projection meant to travel, and
+  `ai docs export` exists to be handed to someone with no checkout, so per-machine data stays out
+  of it. The asset carries per-tool aggregates only — no working-directory path, session id, or
+  branch — and an unbuilt panel says so instead of showing a zero.
+- Receipts may record the agent session that produced them, which is what lets cost be attributed
+  to the task that caused it. The field is optional, so every existing receipt stays valid
+  unedited. Attribution joins only on a recorded identity, never on branch or timing, and the
+  reader reports how many tasks are attributable so an empty table cannot read as no spend.
+- The estimate for a tool that records no tokens now follows how far its own conversation grew,
+  calibrated against tools that do report. Across 106 measured sessions the previous flat
+  per-turn multiplier put 49% of them within a factor of two; this puts 98%.
+- The graph layout settles instead of stopping after about a second. It previously ran a fixed
+  frame budget and stopped mid-flight, so the only way to continue was toggling Freeze.
+
 New since 0.1.0:
 
-- `ai usage show` reports what agent work consumed, from the records each tool already writes;
-  `ai usage build` surfaces the same report in the reader
+- `ai usage show` reports what agent work consumed, from the records each tool already writes
   locally. Tokens where a tool records them, subscription quota where it reports it, a labelled
   estimate where it records neither, and unknown rather than zero where nothing can be measured.
 - `ai docs sync` refreshes the reader's task data in place, so reading a task you just finished no
@@ -301,7 +317,7 @@ ai docs lint
 `lint` fails on a relation whose target does not exist, which is what stops the graph quietly
 rotting as documents are renamed or removed. Run it in CI.
 
-> **Not in 0.2.0:** the reader also has a *Project Intelligence* screen for a source-symbol graph —
+> **Not in 0.2.1:** the reader also has a *Project Intelligence* screen for a source-symbol graph —
 > crates, modules, files, and call edges. It needs an indexer that this release does not ship, so it
 > reports itself unconfigured and nothing else depends on it. The document and task graph above is
 > fully available.
