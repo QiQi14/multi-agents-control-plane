@@ -26,9 +26,21 @@ approval.
 
 ## Status
 
-**v0.1.0 is the first public release.** The core was built and exercised across internal
-repositories before being extracted, and every gate below runs in CI, but the public CLI and the
-artifact schemas are pre-1.0 and may still change between minor versions.
+**v0.2.0.** The core was built and exercised across internal repositories before being extracted,
+and every gate below runs in CI, but the public CLI and the artifact schemas are pre-1.0 and may
+still change between minor versions.
+
+New since 0.1.0:
+
+- `ai usage show` reports what agent work consumed, from the records each tool already writes
+  locally. Tokens where a tool records them, subscription quota where it reports it, a labelled
+  estimate where it records neither, and unknown rather than zero where nothing can be measured.
+- `ai docs sync` refreshes the reader's task data in place, so reading a task you just finished no
+  longer means reprojecting the whole corpus.
+- The reader gained a task graph: `#/tasks?view=graph` puts the dependency structure on the same
+  interactive canvas the document graph uses, with seven relation kinds and four lifecycle states
+  each independently toggleable. `ai docs graph --tasks` writes the same structure as a static SVG.
+- `ai docs graph` reports what it wrote instead of printing SVG markup to the terminal.
 
 The core carries no language, stack, or vendor policy, and CI proves a clean install, setup and
 uninstall on Linux, macOS and Windows against Python 3.10-3.13. Compatibility beyond that is
@@ -266,7 +278,7 @@ ai docs lint
 `lint` fails on a relation whose target does not exist, which is what stops the graph quietly
 rotting as documents are renamed or removed. Run it in CI.
 
-> **Not in 0.1.0:** the reader also has a *Project Intelligence* screen for a source-symbol graph —
+> **Not in 0.2.0:** the reader also has a *Project Intelligence* screen for a source-symbol graph —
 > crates, modules, files, and call edges. It needs an indexer that this release does not ship, so it
 > reports itself unconfigured and nothing else depends on it. The document and task graph above is
 > fully available.
