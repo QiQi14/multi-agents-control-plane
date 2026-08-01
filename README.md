@@ -409,7 +409,7 @@ and the installer warns you before that happens. Move anything hand-written into
 | Extensions | `ext list`, `ext run`, `tools list`, `tools configure` |
 | Usage | `usage show` |
 | Skill packs | `skills list`, `skills add`, `skills remove` |
-| Documentation | `docs build`, `docs sync`, `docs export`, `docs lint`, `docs search`, `docs stats`, `docs graph` |
+| Documentation | `docs build`, `docs sync`, `docs export`, `docs lint`, `docs search`, `docs stats`, `docs graph`, `docs graph --tasks` |
 | Hand-authored specs | `blueprint init`, `blueprint build` |
 
 ---

@@ -1354,6 +1354,10 @@
       '<div class="page">' +
         '<div class="section-head"><h2>Task contracts</h2>' +
         '<span class="hint">Every discoverable task contract, across current and historical lifecycle states</span></div>' +
+        // The dependency hierarchy is generated beside the document graphs but had no entry point,
+        // so the one structure this screen is about -- what waits on what -- was unreachable.
+        '<p class="rel-kind"><a class="btn" href="graphs/graph-tasks.html">◈ Dependency hierarchy</a>' +
+        ' <span>Which task waits on which, laid out by depth.</span></p>' +
         '<div class="catalog">' + facets +
         '<div>' +
           '<div class="toolbar">' +

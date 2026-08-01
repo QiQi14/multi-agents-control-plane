@@ -1518,6 +1518,16 @@ def cmd_docs_build(
 
     corpus_ids = sorted({_document_corpus(document) for document in documents}, key=len, reverse=True)
     graph_paths = emit_graph_artifacts(reg, graphs_dir, ai_root=target_ai)
+    # The task hierarchy ships with the document graphs so the reader's link always resolves,
+    # rather than only after someone happens to run `ai docs graph --tasks`.
+    try:
+        from scripts.ai_plane.knowledge_projection.tasks import build_tasks
+        from scripts.ai_plane.task_graph import write_task_graph
+
+        write_task_graph(build_tasks(target_ai.parent).get("tasks", []), graphs_dir)
+    except (OSError, ValueError, KeyError) as error:
+        # A task corpus that cannot be projected must not fail the documentation build.
+        print(f"WARNING: task hierarchy graph skipped: {error}")
     graph_edges = _collect_edges(documents, target_ai)
     reader_model = build_knowledge_projection(
         target_ai.parent,
@@ -1960,9 +1970,17 @@ def add_docs_parser(sub: Any) -> None:
     docs_search_p = docs_sub.add_parser("search", help="Build/query JSON search index")
     docs_search_p.add_argument("query", nargs="?", help="Optional search query term")
     docs_sub.add_parser("stats", help="Report document health metrics (orphans, stale chains, coverage)")
-    docs_graph_p = docs_sub.add_parser("graph", help="Emit relation graph SVG")
+    docs_graph_p = docs_sub.add_parser(
+        "graph", help="Write relation and task-hierarchy graphs to .ai/_site/graphs/")
     docs_graph_p.add_argument("doc_id", nargs="?", help="Optional focus document ID")
     docs_graph_p.add_argument("--domain", help="Optional domain filter")
+    docs_graph_p.add_argument("--tasks", action="store_true",
+                              help="Task dependency hierarchy instead of document relations")
+    docs_graph_p.add_argument("--all", action="store_true",
+                              help="With --tasks, include archived tasks (default: live work only)")
+    docs_graph_p.add_argument("--out", help="Write the requested graph to this path")
+    docs_graph_p.add_argument("--stdout", action="store_true",
+                              help="Print the SVG markup instead of reporting where it was written")
 
     from scripts.ai_plane.docs_export import add_docs_export_parser
     add_docs_export_parser(docs_sub)
@@ -2008,4 +2026,6 @@ def cmd_docs(args: Any) -> None:
     elif cmd == "stats":
         cmd_docs_stats()
     elif cmd == "graph":
-        print(cmd_docs_graph(doc_id=getattr(args, "doc_id", None), domain=getattr(args, "domain", None)))
+        from scripts.ai_plane.docs_graph_cli import cmd_docs_graph_cli
+
+        cmd_docs_graph_cli(args, emit=cmd_docs_graph)
