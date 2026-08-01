@@ -303,12 +303,12 @@
     {
       "command": "ai sync",
       "path": "AGENTS.md",
-      "sha256": "82fbb639bacf53c402a5e4d1742be8003ee0c32ab9c31d1dcff937705a32555d"
+      "sha256": "dcfb292ec6301caef7c9a51c2691f690e1a74392da38256f5189f1974dfb8f78"
     },
     {
       "command": "ai sync",
       "path": "CLAUDE.md",
-      "sha256": "cd32c964312c21d0f0d7bbf73986454768172427f3c1438562f080cce2236347"
+      "sha256": "922234d573fb079fdbf2d33427b25f6b42d4189718474e842cff38e09bc266d2"
     },
     {
       "command": "ai sync",

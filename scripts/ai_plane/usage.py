@@ -8,8 +8,9 @@ an order of magnitude. The four classes stay separate from collection through to
 
 It does not estimate tokens from word or character counts. Input outweighs output by 300-640x in an
 agent loop, because the cost is context re-read every turn rather than text anyone wrote. No word
-count predicts that. Where a tool records nothing, the estimate is per-STEP, calibrated from tools
-that do record, and it is labelled an estimate everywhere it appears.
+count predicts that. Where a tool records nothing, the estimate is driven by how far its own
+conversation GREW -- the summed running prefix, which is the area under the transcript rather than
+its length -- calibrated against tools that do record, and labelled an estimate wherever it appears.
 
 Rates are user-supplied data carrying an `as_of` date and a source. None is built in: a price
 recalled by a model is a guess with a short half-life, and a wrong rate that looks authoritative is
@@ -27,6 +28,7 @@ import scripts.ai_plane.constants as constants
 from scripts.ai_plane.usage_sources import (
     Usage,
     antigravity_conversations,
+    antigravity_reread_magnitude,
     antigravity_steps,
     claude_session_context,
     claude_sessions,
@@ -161,7 +163,8 @@ def collect(home: Path, *, cwd_filter: str | None = None) -> list[dict[str, Any]
         sessions.append({
             "path": path,
             "usage": Usage(tool="antigravity", measured=False, turns=steps,
-                           basis="step count; antigravity records no tokens"),
+                           basis="conversation growth; antigravity records no tokens",
+                           magnitude=antigravity_reread_magnitude(path) or 0),
             "session_id": path.stem, "cwd": None, "branch": None, "first": None, "last": None,
         })
     if cwd_filter:
@@ -172,24 +175,49 @@ def collect(home: Path, *, cwd_filter: str | None = None) -> list[dict[str, Any]
 
 
 def calibrate(sessions: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Tokens per step, learned from tools that measure, for tools that do not.
+    """Tokens per unit of prefix-re-read magnitude, learned from tools that measure.
 
-    This is the only honest basis for estimating an unmeasurable tool: it extrapolates the thing
-    that actually drives volume, which is turns against a growing context.
+    The quantity being extrapolated matters more than the constant. An agent loop re-reads its
+    accumulated context every step, so consumption tracks the AREA under the transcript, not its
+    length and not the step count. Measured across 106 local Claude sessions carrying 8.74e9 input
+    tokens: a flat tokens-per-turn multiplier put 49% of sessions within a factor of two (median
+    error 103%), while this magnitude-based fit put 98% within a factor of two (median error 59%).
+
+    The constant is the MEDIAN of each session's own ratio, not total-over-total. A summed fit is
+    dominated by a handful of very large sessions and then misprices every ordinary one -- which is
+    the same bias, moved rather than removed.
     """
-    measured = [s["usage"] for s in sessions if s["usage"].measured and s["usage"].turns]
-    if not measured:
+    ratios: list[float] = []
+    tools: set[str] = set()
+    magnitude = 0
+    for entry in sessions:
+        usage = entry["usage"]
+        if not usage.measured or not usage.magnitude:
+            continue
+        tokens = (usage.input_tokens + usage.cached_input_tokens
+                  + usage.cache_write_tokens + usage.output_tokens)
+        if tokens <= 0:
+            continue
+        ratios.append(tokens / usage.magnitude)
+        tools.add(usage.tool)
+        magnitude += usage.magnitude
+    if not ratios:
         return None
-    turns = sum(u.turns for u in measured)
-    if not turns:
-        return None
-    total = sum(u.input_tokens + u.cached_input_tokens + u.cache_write_tokens + u.output_tokens
-                for u in measured)
+    ratios.sort()
+    middle = len(ratios) // 2
+    median = ratios[middle] if len(ratios) % 2 else (ratios[middle - 1] + ratios[middle]) / 2
+    # Spread is reported so a reader can judge the estimate rather than take it: the interquartile
+    # band is how far ordinary sessions sit from the constant being applied to them.
+    low = ratios[len(ratios) // 4]
+    high = ratios[(len(ratios) * 3) // 4]
     return {
-        "tokens_per_turn": round(total / turns, 1),
-        "sample_turns": turns,
-        "sample_sessions": len(measured),
-        "tools": sorted({u.tool for u in measured}),
+        "tokens_per_magnitude": median,
+        "spread_low": low,
+        "spread_high": high,
+        "sample_sessions": len(ratios),
+        "sample_magnitude": magnitude,
+        "tools": sorted(tools),
+        "fit": "median of per-session ratios; a summed fit is dominated by the largest sessions",
     }
 
 
@@ -204,25 +232,104 @@ def _round_significant(value: float, digits: int = 2) -> int:
 
 
 def estimate(usage: Usage, calibration: dict[str, Any] | None) -> dict[str, Any]:
-    """A range, with its unverified assumption stated.
+    """A range, with its unverified assumptions stated.
 
-    The calibration is tokens per TURN, learned from tools that record turns. This tool records
-    STEPS, and nothing establishes that a step and a turn are the same unit of work -- Claude writes
-    roughly three records per turn, so a step is plausibly finer. Rather than launder that gap into
-    a single confident number, the estimate spans an order of magnitude around the assumption and
-    says why.
+    The magnitude is this tool's own recorded conversation growth, so session length is no longer
+    laundered through an average. Two assumptions remain, and both are named rather than absorbed:
+    the constant was fitted on a DIFFERENT tool's sessions, and this tool's stored payload may
+    include render or permission data that is not context, which inflates magnitude. The band comes
+    from the observed spread of the fit, not from a decorative multiplier.
     """
-    if not usage.turns or not calibration:
+    if not calibration:
         return {"tokens": None, "reason": "no calibration available from a measuring tool"}
-    centre = usage.turns * calibration["tokens_per_turn"]
+    if not usage.magnitude:
+        return {"tokens": None,
+                "reason": "this tool's conversation store could not be read for content size"}
+    rate = calibration["tokens_per_magnitude"]
+    low_rate, high_rate = calibration["spread_low"], calibration["spread_high"]
+    narrow = high_rate <= low_rate
+    if narrow:
+        # Too few measured sessions to observe a spread. Reporting low == high would claim a
+        # precision the sample cannot support, so widen explicitly and say the band is assumed
+        # rather than measured.
+        low_rate, high_rate = rate / 3, rate * 3
+    others = [t for t in calibration.get("tools", []) if t != usage.tool]
+    assumption = ("the rate was fitted on " + (", ".join(others) or "another tool")
+                  + " sessions and applied to this tool; that equivalence is NOT verified")
+    if narrow:
+        assumption += ("; the sample was too small to observe a spread, so the band is an assumed "
+                       "third-to-triple rather than a measured one")
     return {
-        "low": _round_significant(centre / 3),
-        "tokens": _round_significant(centre),
-        "high": _round_significant(centre * 3),
-        "basis": f"{usage.turns:,} steps x {calibration['tokens_per_turn']:,.0f} tokens/turn",
-        "assumption": "one step is treated as one turn; that equivalence is NOT verified",
+        "low": _round_significant(usage.magnitude * low_rate),
+        "tokens": _round_significant(usage.magnitude * rate),
+        "high": _round_significant(usage.magnitude * high_rate),
+        "basis": f"{usage.magnitude:,} bytes of prefix re-read x {rate:.4f} tokens/byte",
+        "band": "assumed" if narrow else "observed spread of the fit",
+        "assumption": assumption,
         "calibrated_from": calibration,
     }
+
+
+TASK_STATES = ("queue", "active", "done", "archive")
+PLACEHOLDER = "fill-me"
+
+
+def receipt_session_map(ai: Path | None = None) -> tuple[dict[str, str], dict[str, Any]]:
+    """Map each recorded agent session to the task whose receipt claims it.
+
+    Returns ``(session_id -> task_id, coverage)``. Only an identity a receipt actually recorded is
+    used. Nothing is inferred from branch, which collapses to the default branch under patch
+    isolation, nor from wall-clock overlap, which cannot separate two agents working concurrently
+    in one checkout: a wrong attribution is worse than none, because it reads as a fact.
+
+    A session claimed by more than one task is dropped rather than split or double-counted, and
+    counted so the ambiguity stays visible instead of quietly shrinking the total.
+    """
+    root = ai or constants.AI
+    owners: dict[str, set[str]] = {}
+    tasks_seen: set[str] = set()
+    tasks_with_identity: set[str] = set()
+    for state in TASK_STATES:
+        state_dir = root / "tasks" / state
+        if not state_dir.is_dir():
+            continue
+        for task_dir in sorted(p for p in state_dir.iterdir() if p.is_dir()):
+            tasks_seen.add(task_dir.name)
+            for receipt in sorted(task_dir.glob("receipt*.yaml")):
+                try:
+                    data = json.loads(receipt.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    # A legacy free-form receipt is not JSON. It carries no identity by
+                    # definition, so it is skipped rather than treated as a failure.
+                    continue
+                actor = data.get("actor")
+                session = actor.get("session_id") if isinstance(actor, dict) else None
+                if not isinstance(session, str) or not session or session.startswith(PLACEHOLDER):
+                    continue
+                owners.setdefault(session, set()).add(task_dir.name)
+                tasks_with_identity.add(task_dir.name)
+
+    ambiguous = {s for s, t in owners.items() if len(t) > 1}
+    mapping = {s: next(iter(t)) for s, t in owners.items() if len(t) == 1}
+    coverage = {
+        "tasks_total": len(tasks_seen),
+        "tasks_attributed": len(tasks_with_identity),
+        "sessions_claimed": len(mapping),
+        "sessions_ambiguous": len(ambiguous),
+    }
+    return mapping, coverage
+
+
+def attribute(sessions: list[dict[str, Any]], mapping: dict[str, str]) -> dict[str, Usage]:
+    """Fold each collected session into the task that claimed it, by recorded identity alone."""
+    by_task: dict[str, Usage] = {}
+    for session in sessions:
+        task = mapping.get(str(session.get("session_id") or ""))
+        if not task:
+            continue
+        usage = session["usage"]
+        by_task[task] = by_task[task].add(usage) if task in by_task else usage
+    return by_task
 
 
 def _fmt(value: int) -> str:
@@ -282,12 +389,64 @@ def cmd_usage_show(args: argparse.Namespace, *, die) -> None:
             print(f"  quota          plan={q.get('plan')} used={q.get('used_percent')}%"
                   f" window={q.get('window_minutes')}min")
     if calibration:
-        print(f"\nCalibration: {calibration['tokens_per_turn']} tokens/turn from "
-              f"{calibration['sample_turns']:,} measured turns across "
-              f"{calibration['sample_sessions']} session(s) ({', '.join(calibration['tools'])}).")
+        print(f"\nCalibration: {calibration['tokens_per_magnitude']:.4f} tokens per byte of prefix "
+              f"re-read (middle half spans {calibration['spread_low']:.4f}-"
+              f"{calibration['spread_high']:.4f}), fitted as the median of "
+              f"{calibration['sample_sessions']} measured session(s) "
+              f"({', '.join(calibration['tools'])}).")
     if not billing:
         print(f"\nNo billing profile. Create {BILLING_RELATIVE_PATH} to price measured tokens; "
               "every rate needs an as_of date and a source.")
+
+
+def cmd_usage_build(args: argparse.Namespace, *, die) -> None:
+    """Write the reader's usage asset from local session records.
+
+    Deliberately separate from `ai docs build`. That build is a deterministic projection of the
+    repository and its output is meant to be shareable; this reads the operator's home directory.
+    Keeping it a distinct, opt-in command is what stops per-machine data reaching an exported
+    report.
+    """
+    from datetime import datetime, timezone
+
+    from scripts.ai_plane import usage_reader
+
+    try:
+        billing = load_billing()
+    except BillingError as error:
+        die(str(error))
+    home = Path.home()
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        sessions = collect(home, cwd_filter=str(constants.ROOT) if args.here else None)
+    except OSError as error:
+        payload = usage_reader.unavailable_payload(str(error))
+    else:
+        mapping, coverage = receipt_session_map()
+        payload = usage_reader.build_payload(
+            sessions, billing, generated_at=stamp,
+            by_task=attribute(sessions, mapping), coverage=coverage)
+
+    assets = constants.AI / "_site" / "assets"
+    if not assets.parent.is_dir():
+        die("No site to write into. Run `python scripts/ai_cli.py docs build` first.")
+    path = usage_reader.write_asset(assets, payload)
+    tools = ", ".join(entry["tool"] for entry in payload["tools"]) or "none"
+    print(f"Wrote {rel(path)}  state={payload['state']}  "
+          f"sessions={payload['sessions_read']}  tools={tools}")
+    print("This asset is per-machine and gitignored. It is not part of `ai docs export`.")
+
+
+def cmd_usage(args: argparse.Namespace, *, die) -> None:
+    """Route the usage subcommands here rather than in the CLI facade.
+
+    `ai_cli.py` is capped by an architecture ratchet and is meant to stay a thin facade, so a
+    command owns its own subcommand routing the way `ext` and `skills` already do.
+    """
+    if getattr(args, "usage_command", "show") == "build":
+        cmd_usage_build(args, die=die)
+    else:
+        cmd_usage_show(args, die=die)
 
 
 def add_usage_parser(sub) -> None:
@@ -296,3 +455,7 @@ def add_usage_parser(sub) -> None:
     show = usage_sub.add_parser("show", help="Show measured tokens, quota, and estimates by tool")
     show.add_argument("--here", action="store_true",
                       help="Only sessions whose working directory is this repository")
+    build = usage_sub.add_parser(
+        "build", help="Write the reader's usage panel data from local session records")
+    build.add_argument("--here", action="store_true",
+                       help="Only sessions whose working directory is this repository")

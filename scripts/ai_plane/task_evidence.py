@@ -106,9 +106,19 @@ def validate_receipt(data: dict[str, Any], where: str = "receipt") -> list[str]:
 
     actor = _map(data.get("actor"), f"{where}.actor", errors)
     actor_fields = {"name", "family", "tool", "model", "reasoning"}
-    errors += _keys(actor, actor_fields, actor_fields, f"{where}.actor")
+    # `session_id` is optional exactly the way `revision.diff_fingerprint` below is: named in the
+    # allowed set, absent from the required one. It stays additive, so every receipt written before
+    # the field existed still validates unedited -- which is why `schema_version` stays 1. The
+    # versioning rule guards against redefining what a recorded artifact means, and an optional new
+    # field does not do that. It is the join key that lets usage attribute cost to the task that
+    # caused it; without it, attribution would have to guess from branch or wall-clock overlap.
+    errors += _keys(actor, actor_fields, actor_fields | {"session_id"}, f"{where}.actor")
     for key in actor_fields:
         _text(actor.get(key), f"{where}.actor.{key}", errors)
+    if actor.get("session_id") is not None:
+        # Identifier form, not free text: it also refuses anything containing a path separator, so
+        # a transcript path cannot be pasted here and carried into a shareable artifact.
+        _text(actor.get("session_id"), f"{where}.actor.session_id", errors, identifier=True)
 
     revision = _map(data.get("revision"), f"{where}.revision", errors)
     revision_fields = {"base_commit", "head_commit", "diff"}
@@ -395,7 +405,11 @@ def receipt_template(task_id: str, role: str, actor_tool: str, base_commit: str)
         "task_id": task_id,
         "role": role,
         "sequence": sequence,
-        "actor": {"name": "fill-me", "family": "fill-me", "tool": actor_tool, "model": "fill-me", "reasoning": "fill-me"},
+        # `session_id` is scaffolded so an agent sees the field exists. It is optional, so leaving
+        # the placeholder is not an error -- but a filled one is what lets usage attribute this
+        # task's cost, and an unfilled one leaves the task reported as unattributed, not as free.
+        "actor": {"name": "fill-me", "family": "fill-me", "tool": actor_tool, "model": "fill-me",
+                  "reasoning": "fill-me", "session_id": "fill-me"},
         "revision": {"base_commit": base_commit, "head_commit": "fill-me", "diff": "fill-me"},
         "environment": {"os": "fill-me", "arch": "fill-me", "device": "fill-me"},
         "decision": {"status": status, "outcome": "fill-me"},

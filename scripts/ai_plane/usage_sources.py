@@ -42,6 +42,10 @@ class Usage:
     models: set[str] = field(default_factory=set)
     quota: dict[str, Any] | None = None
     basis: str = ""
+    # Prefix-re-read magnitude: the summed running prefix of this session's content sizes. It is
+    # not a token count and must never be shown as one -- it is the quantity that predicts tokens,
+    # for tools that report none. 0 means "not computed", which keeps such a tool unknown.
+    magnitude: int = 0
 
     def add(self, other: "Usage") -> "Usage":
         return Usage(
@@ -56,6 +60,7 @@ class Usage:
             models=self.models | other.models,
             quota=other.quota or self.quota,
             basis=other.basis or self.basis,
+            magnitude=self.magnitude + other.magnitude,
         )
 
 
@@ -115,6 +120,10 @@ def claude_usage(path: Path) -> Usage | None:
     seen: set[str] = set()
     total = Usage(tool="claude", measured=True, basis="session transcript")
     found = False
+    # A measured tool must supply BOTH numbers from the same session, because that pairing is what
+    # calibrates the estimate for tools that report no tokens. This is a second sequential pass over
+    # the file; the parsed-record iterator below yields dicts, not raw line lengths.
+    total.magnitude = jsonl_reread_magnitude(path) or 0
     for record in _read_jsonl(path):
         message = record.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
@@ -194,6 +203,7 @@ def codex_usage(path: Path) -> Usage | None:
         models={model} if model else set(),
         quota=_codex_quota(quota),
         basis="rollout running total",
+        magnitude=jsonl_reread_magnitude(path) or 0,
     )
 
 
@@ -233,6 +243,57 @@ def codex_session_context(path: Path) -> dict[str, Any]:
 def antigravity_conversations(home: Path) -> list[Path]:
     root = home / ".gemini" / "antigravity-ide" / "conversations"
     return sorted(root.glob("*.db")) if root.is_dir() else []
+
+
+def prefix_reread_magnitude(sizes: Iterator[int]) -> int:
+    """Sum the running prefix over a conversation's step sizes.
+
+    An agent loop does not spend tokens in proportion to the text anyone wrote. At step n it re-reads
+    the accumulated prefix, so cumulative input tracks the AREA under the transcript, not its length.
+    Measured here: transcript length alone lands at 0.047 bytes per measured token, about two orders
+    of magnitude off, while this sum lands within a stable constant.
+
+    Sizes only. No message content is retained by anything that calls this.
+    """
+    running = total = 0
+    for size in sizes:
+        running += max(0, size)
+        total += running
+    return total
+
+
+def jsonl_reread_magnitude(path: Path) -> int | None:
+    """Prefix-re-read magnitude of a transcript, read a line at a time so nothing is held."""
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:
+            return prefix_reread_magnitude(len(line) for line in handle)
+    except OSError:
+        return None
+
+
+def antigravity_reread_magnitude(path: Path) -> int | None:
+    """Prefix-re-read magnitude for one Antigravity conversation.
+
+    Only the LENGTH of each step payload is read out of SQLite; the payload itself never leaves the
+    database. Returns None -- never 0 -- when the store cannot be opened or has no steps table, so
+    an unreadable conversation stays unknown rather than becoming a confident zero.
+    """
+    try:
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return None
+    try:
+        names = {row[0] for row in
+                 connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "steps" not in names:
+            return None
+        rows = connection.execute(
+            "SELECT COALESCE(LENGTH(step_payload), 0) FROM steps ORDER BY idx")
+        return prefix_reread_magnitude(int(row[0]) for row in rows)
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+    finally:
+        connection.close()
 
 
 def antigravity_steps(path: Path) -> int | None:

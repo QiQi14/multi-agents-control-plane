@@ -103,6 +103,13 @@ def write_knowledge_assets(model: dict[str, Any], site_dir: Path) -> tuple[Path,
         else None
     )
     write_accepted_reader_assets(model, assets_dir, repository_root=repository_root)
+    # The usage panel reads a per-machine asset this build must never populate. Writing the
+    # not-built state here keeps the script tag resolving (the reader is opened over file://,
+    # where a missing asset is a console error) and keeps an unfilled panel honest instead of
+    # letting it render a zero.
+    from scripts.ai_plane import usage_reader
+
+    usage_reader.write_asset(assets_dir, usage_reader.not_built_payload())
     return json_path, js_path
 
 

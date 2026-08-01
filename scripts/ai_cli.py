@@ -352,9 +352,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "ext":
         cmd_ext(args)
     elif args.command == "usage":
-        from scripts.ai_plane.usage import cmd_usage_show
+        from scripts.ai_plane.usage import cmd_usage
 
-        cmd_usage_show(args, die=die)
+        cmd_usage(args, die=die)
     elif args.command == "skills":
         skills_module.cmd_skills(args, root=ROOT, ai=AI, die=die)
     elif args.command == "dispatch":

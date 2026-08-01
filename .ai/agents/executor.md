@@ -40,10 +40,16 @@ High-risk work still needs independent review by a different tool or model unles
 
 ## Executor Receipt
 
+Record `session_id` when your tool exposes one. It is the only reliable way to attribute what this
+task consumed to this task: branch collapses to the default branch under patch isolation, and
+wall-clock overlap cannot separate two agents working in one checkout. Leaving it out is allowed
+and the task is then reported as unattributed - which is honest, but it is not free.
+
 ```yaml
 task_id:
 agent:
 tool:
+session_id:
 branch:
 base_commit:
 isolation_strategy:

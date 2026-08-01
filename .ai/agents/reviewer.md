@@ -30,10 +30,14 @@ profile at the configured review-depth floor; stronger reasoning needs a task-sp
 
 ## QA Receipt
 
+Record `session_id` when your tool exposes one, for the same reason the executor does: review is
+agent work with a real cost, and a task's total is wrong if only its execution is counted.
+
 ```yaml
 task_id:
 reviewer:
 tool:
+session_id:
 base_commit:
 reviewed_diff:
 scope_check:

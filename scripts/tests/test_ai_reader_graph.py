@@ -345,3 +345,51 @@ class AssetIntegrityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LayoutSettlingTests(unittest.TestCase):
+    """The layout must stop because it came to rest, not because a frame budget ran out.
+
+    Shipped behaviour before this: `animate(60)` ran exactly 60 frames, about one second, then
+    stopped whatever the layout was doing. On the task graph the fastest node was still travelling
+    hundreds of pixels per frame at that point, so the physics appeared to die mid-flight and the
+    only way to resume it was toggling Freeze, which bought another second. Users had to toggle
+    repeatedly to reach a settled layout.
+    """
+
+    def test_the_run_is_not_ended_by_a_frame_countdown(self) -> None:
+        source = app()
+        self.assertNotIn("if (left > 0 || drag)", source,
+                         "a decrementing frame budget is what stopped the layout mid-settle")
+        self.assertIn("atRest", source, "termination must be decided by rest, not by a count")
+
+    def test_the_simulation_cools_so_rest_is_guaranteed(self) -> None:
+        """Quiet-frame detection alone never fires: this force field does not converge on its own.
+
+        Measured over 1,800 frames without cooling, the task graph was still moving several pixels
+        per frame, so every run would have ended at the ceiling instead of at rest.
+        """
+        source = app()
+        self.assertIn("ALPHA_COOL", source)
+        self.assertIn("alpha *= ALPHA_COOL", source, "alpha must actually decay each frame")
+        self.assertIn("alpha < ALPHA_MIN", source, "a cooled simulation must be allowed to finish")
+
+    def test_tick_reports_how_far_the_layout_moved(self) -> None:
+        """Rest cannot be detected if the integrator reports nothing."""
+        source = app()
+        body = source[source.index("function tick(alpha)"):source.index("function animate(")]
+        self.assertIn("return moved", body)
+
+    def test_repulsion_is_clamped_at_short_range(self) -> None:
+        """Unclamped, 7200/d^2 explodes as two nodes approach: one frame moved a node 40,791px,
+        which is what flung stray nodes into a long tail away from the cluster."""
+        source = app()
+        self.assertIn("REPEL_MIN_D", source)
+        self.assertNotIn("var repel = 7200 / (d * d);", source,
+                         "the unclamped inverse-square term is the blow-up")
+
+    def test_freeze_still_stops_the_layout_immediately(self) -> None:
+        """Cooling must not weaken the control: freezing mid-run has to halt on the next frame."""
+        source = app()
+        body = source[source.index("function animate(minFrames)"):source.index("function radius(")]
+        self.assertIn("if (frozen) { raf = null; draw(); return; }", body)

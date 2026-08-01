@@ -786,11 +786,166 @@
           '</aside>' +
         '</div>' +
       '</section>' +
+      usageSection() +
       '<p class="result-count">Snapshot built from the working tree at <code>' +
       esc(DATA.meta.sourceCommit) + '</code>. ' + esc(DATA.meta.note) + '</p>' +
       '</div>';
 
     main.innerHTML = html;
+  }
+
+  // ------------------------------------------------------------------ USAGE
+  // Written by `ai usage build`, never by `ai docs build`: it is per-machine data read out of the
+  // operator's home directory, so it stays out of CP_DATA and out of an exported task report.
+
+  var TOKEN_CLASSES = [
+    { key: 'input', label: 'input' },
+    { key: 'cached_input', label: 'cached input' },
+    { key: 'cache_write', label: 'cache write' },
+    { key: 'output', label: 'output' }
+  ];
+
+  function usageData() {
+    var u = window.CP_USAGE;
+    return u && typeof u === 'object' ? u : null;
+  }
+
+  function usageNumber(n) {
+    return typeof n === 'number' ? n.toLocaleString() : '—';
+  }
+
+  function usageCostCell(cost) {
+    if (!cost) return '<span class="usage-unknown">—</span>';
+    if (cost.amount === null || cost.amount === undefined) {
+      // An unpriced tool states why. Rendering 0 here would read as "this was free".
+      return '<span class="usage-unknown" title="' + esc(cost.reason || '') + '">unknown</span>';
+    }
+    return '<strong>' + esc(cost.amount.toFixed(4)) + ' ' + esc(cost.currency || 'USD') + '</strong>' +
+      (cost.as_of ? '<span class="usage-rate">rate as of ' + esc(cost.as_of) + '</span>' : '');
+  }
+
+  function usageToolRow(tool) {
+    var head =
+      '<div class="usage-tool-head">' +
+        '<h4>' + esc(tool.tool) + '</h4>' +
+        '<span class="usage-tag" data-measured="' + (tool.measured ? '1' : '0') + '">' +
+          (tool.measured ? 'measured' : 'estimate') + '</span>' +
+        '<span class="grow"></span>' +
+        '<span class="usage-turns">' + usageNumber(tool.turns) + ' turns</span>' +
+      '</div>' +
+      (tool.basis ? '<p class="usage-basis">' + esc(tool.basis) + '</p>' : '');
+
+    if (!tool.measured) {
+      var e = tool.estimate || {};
+      if (e.tokens === null || e.tokens === undefined) {
+        return '<article class="usage-tool">' + head +
+          '<p class="usage-unknown-block">Tokens unknown. ' + esc(e.reason || '') + '</p></article>';
+      }
+      // A range, not a point. The assumption underneath it is printed rather than absorbed.
+      return '<article class="usage-tool">' + head +
+        '<p class="usage-range">' + usageNumber(e.low) + ' – ' + usageNumber(e.high) +
+          '<span class="usage-mid">midpoint ' + usageNumber(e.tokens) + '</span></p>' +
+        '<p class="usage-assumption"><strong>Estimate.</strong> ' + esc(e.basis || '') +
+          (e.assumption ? ' — ' + esc(e.assumption) : '') + '</p>' +
+      '</article>';
+    }
+
+    var t = tool.tokens || {};
+    return '<article class="usage-tool">' + head +
+      '<dl class="usage-classes">' + TOKEN_CLASSES.map(function (cls) {
+        return '<div><dt>' + cls.label + '</dt><dd>' + usageNumber(t[cls.key]) + '</dd></div>';
+      }).join('') + '</dl>' +
+      (t.reasoning ? '<p class="usage-basis">of which reasoning ' + usageNumber(t.reasoning) + '</p>' : '') +
+      (tool.models && tool.models.length
+        ? '<p class="usage-basis">' + tool.models.map(esc).join(', ') + '</p>' : '') +
+      '<p class="usage-cost">' + usageCostCell(tool.cost) + '</p>' +
+      (tool.quota
+        ? '<p class="usage-basis">quota ' + esc(String(tool.quota.used_percent)) + '% used' +
+          (tool.quota.plan ? ' · ' + esc(String(tool.quota.plan)) : '') + '</p>'
+        : '') +
+    '</article>';
+  }
+
+  function usageAttribution(u) {
+    var cov = u.coverage || {};
+    var tasks = u.tasks || [];
+    var total = cov.tasks_total || 0;
+    var attributed = cov.tasks_attributed || 0;
+
+    // An empty list here means "nobody recorded which session did the work", NOT "these tasks were
+    // free". The coverage line is what makes those two readings impossible to confuse.
+    var coverageLine =
+      '<p class="ghint usage-foot">' + esc(usageNumber(attributed)) + ' of ' +
+      esc(usageNumber(total)) + ' task(s) record the agent session that produced them' +
+      (cov.sessions_ambiguous
+        ? ' · ' + esc(usageNumber(cov.sessions_ambiguous)) +
+          ' session(s) claimed by more than one task were left out rather than split'
+        : '') +
+      '.</p>';
+
+    if (!tasks.length) {
+      return '<div class="card usage-empty usage-attribution">' +
+        '<p><strong>No task is attributable yet.</strong> Cost is joined to a task only through a ' +
+        'session id recorded in its receipt — never guessed from branch or timing, because a wrong ' +
+        'attribution reads as a fact.</p>' + coverageLine + '</div>';
+    }
+
+    return '<div class="usage-attribution">' +
+      '<table class="usage-task-table"><thead><tr>' +
+        '<th scope="col">Task</th><th scope="col">Tool</th>' +
+        '<th scope="col" class="num">Turns</th><th scope="col" class="num">Tokens</th>' +
+        '<th scope="col" class="num">Cost</th>' +
+      '</tr></thead><tbody>' +
+      tasks.map(function (t) {
+        return '<tr><th scope="row"><a href="' + buildHash('task', t.task_id, {}) + '">' +
+            esc(t.task_id) + '</a></th>' +
+          '<td>' + esc(t.tool) + '</td>' +
+          '<td class="num">' + usageNumber(t.turns) + '</td>' +
+          '<td class="num">' + (t.tokens ? usageNumber(t.tokens.total) : '—') + '</td>' +
+          '<td class="num">' + usageCostCell(t.cost) + '</td></tr>';
+      }).join('') +
+      '</tbody></table>' + coverageLine + '</div>';
+  }
+
+  function usageSection() {
+    var u = usageData();
+    var head =
+      '<div class="section-head"><h2>Agent usage</h2>' +
+      '<span class="hint">What the work consumed, on this machine</span></div>';
+
+    if (!u || u.state !== 'measured') {
+      var guidance = u ? u.guidance : 'The usage asset has not been written.';
+      var command = (u && u.command) || 'python scripts/ai_cli.py usage build';
+      return '<section class="section usage-section">' + head +
+        '<div class="card usage-empty">' +
+          '<p>' + esc(guidance) + '</p>' +
+          '<p class="usage-command"><code>' + esc(command) + '</code></p>' +
+          '<p class="ghint">Nothing is reported as zero. A tool that records nothing is reported ' +
+          'as unknown.</p>' +
+        '</div></section>';
+    }
+
+    return '<section class="section usage-section">' + head +
+      '<div class="usage-grid">' + (u.tools || []).map(usageToolRow).join('') + '</div>' +
+      usageAttribution(u) +
+      '<p class="ghint usage-foot">' +
+        esc(usageNumber(u.sessions_read) + ' session(s) read') +
+        (u.generated_at ? ' · collected ' + esc(u.generated_at) : '') +
+        (u.calibration
+          ? ' · estimates calibrated at ' + esc(u.calibration.tokens_per_magnitude.toFixed(4)) +
+            ' tokens per byte of prefix re-read (middle half ' +
+            esc(u.calibration.spread_low.toFixed(4)) + '–' +
+            esc(u.calibration.spread_high.toFixed(4)) + '), median of ' +
+            esc(usageNumber(u.calibration.sample_sessions)) + ' measured sessions'
+          : '') +
+        (u.billing && !u.billing.configured
+          ? ' · no billing profile, so measured tokens are unpriced'
+          : '') +
+      '</p>' +
+      '<p class="ghint usage-foot">Measured and estimated totals are never added together, and the ' +
+      'four token classes stay separate: cached input dominates volume and is charged at a ' +
+      'fraction of the input rate.</p>' +
+    '</section>';
   }
 
   function numberOf(task) {
@@ -2244,7 +2399,7 @@
     }
 
     function tick(alpha) {
-      var i, j, a, b, dx, dy, d;
+      var i, j, a, b, dx, dy, d, moved = 0;
       for (i = 0; i < nodes.length; i++) {
         a = nodes[i];
         if (!visible(a)) continue;
@@ -2253,7 +2408,12 @@
           if (!visible(b)) continue;
           dx = b.x - a.x; dy = b.y - a.y;
           d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-          var repel = 7200 / (d * d);
+          // Clamp only the MAGNITUDE's distance, never the direction. Unclamped, two nodes that
+          // drift close make 7200/d^2 explode -- measured at 40,791px of travel in a single frame,
+          // which is what flung stray nodes into a long tail away from the cluster. Clamped, the
+          // worst frame on the same graph travels 12px.
+          var repelD = d < REPEL_MIN_D ? REPEL_MIN_D : d;
+          var repel = 7200 / (repelD * repelD);
           var ux = dx / d, uy = dy / d;
           a.vx -= ux * repel; a.vy -= uy * repel;
           b.vx += ux * repel; b.vy += uy * repel;
@@ -2276,21 +2436,50 @@
         a.vy -= a.y * 0.0016;
         if (a === drag) { a.vx = 0; a.vy = 0; continue; }
         a.x += a.vx * alpha; a.y += a.vy * alpha;
+        var step = Math.abs(a.vx * alpha) + Math.abs(a.vy * alpha);
+        if (step > moved) moved = step;
         a.vx *= 0.82; a.vy *= 0.82;
       }
+      // The largest distance any node travelled this frame. `animate` uses it to stop when the
+      // layout is actually at rest instead of when a frame budget runs out.
+      return moved;
     }
 
-    function animate(frames) {
+    // Settling is measured, not counted. A fixed frame budget stopped the layout mid-flight: on the
+    // task graph the largest node was still travelling hundreds of pixels per frame when a 60-frame
+    // budget expired, so the physics appeared to run for a second and die, and the only way to
+    // resume it was toggling Freeze -- which just bought another second. The budget below is a
+    // runaway guard, not the normal exit.
+    // Below this separation the inverse-square repulsion is evaluated at a fixed distance; see
+    // the clamp in tick().
+    var REPEL_MIN_D = 14;
+    var SETTLE_PX = 0.35;      // per-frame travel under which the layout is visually at rest
+    var SETTLE_FRAMES = 12;    // consecutive quiet frames, so one slow frame cannot end it early
+    var MAX_FRAMES = 1800;     // runaway guard only; cooling is what normally ends the run
+    var ALPHA_START = 0.85;
+    var ALPHA_COOL = 0.985;    // per-frame decay: reaches the floor in ~250 frames, about 4s
+    var ALPHA_MIN = 0.02;
+
+    function animate(minFrames) {
       if (raf) cancelAnimationFrame(raf);
       raf = null;
       if (frozen || reduceMotion) { draw(); return; }
-      var left = frames;
+      // Cooling is what guarantees the layout comes to rest. Without it this force field never
+      // converges: repulsion keeps re-injecting energy, and the graph was still travelling several
+      // pixels a frame after 1,800 frames. A quiet-frame check alone would therefore never fire and
+      // the run would always end at the ceiling.
+      var alpha = ALPHA_START;
+      var ran = 0, quiet = 0;
       function step() {
         if (frozen) { raf = null; draw(); return; }
-        tick(0.85);
+        var moved = tick(alpha);
         draw();
-        left--;
-        if (left > 0 || drag) raf = requestAnimationFrame(step);
+        alpha *= ALPHA_COOL;
+        ran++;
+        quiet = moved < SETTLE_PX ? quiet + 1 : 0;
+        // `minFrames` keeps a caller's deliberate nudge visible; rest decides the end.
+        var atRest = ran >= minFrames && (alpha < ALPHA_MIN || quiet >= SETTLE_FRAMES);
+        if (ran < MAX_FRAMES && (drag || !atRest)) raf = requestAnimationFrame(step);
         else raf = null;
       }
       raf = requestAnimationFrame(step);

@@ -65,6 +65,36 @@ class ReceiptSchemaTests(unittest.TestCase):
         self.assertEqual([], evidence.validate_receipt(valid_receipt("executor")))
         self.assertEqual([], evidence.validate_receipt(valid_receipt("qa")))
 
+    def test_a_receipt_without_a_session_identity_still_validates(self) -> None:
+        """Every receipt written before the field existed must keep validating, unedited.
+
+        That backward compatibility is the whole reason schema_version stays 1.
+        """
+        receipt = valid_receipt("executor")
+        self.assertNotIn("session_id", receipt["actor"])
+        self.assertEqual([], evidence.validate_receipt(receipt))
+        self.assertEqual(1, receipt["schema_version"])
+
+    def test_a_recorded_session_identity_validates(self) -> None:
+        receipt = valid_receipt("executor")
+        receipt["actor"]["session_id"] = "0ac84bee-79ac-406e-9103-78b289321f9e"
+        self.assertEqual([], evidence.validate_receipt(receipt))
+
+    def test_the_actor_map_still_rejects_an_unknown_sibling_key(self) -> None:
+        """Adding one optional field must not turn the map into a free-form bag."""
+        receipt = valid_receipt("executor")
+        receipt["actor"]["session_secret"] = "anything"
+        errors = evidence.validate_receipt(receipt)
+        self.assertTrue(any("session_secret" in error for error in errors), errors)
+
+    def test_a_session_identity_must_not_be_a_path(self) -> None:
+        """Identifier form doubles as a leak guard: a transcript path cannot be pasted here."""
+        receipt = valid_receipt("executor")
+        receipt["actor"]["session_id"] = "/home/someone/.claude/projects/private.jsonl"
+        errors = evidence.validate_receipt(receipt)
+        self.assertTrue(any("session_id" in error for error in errors), errors)
+
+
     def test_role_specific_attempt_and_round_are_required(self) -> None:
         executor = valid_receipt("executor")
         executor["sequence"] = {"round": 1}

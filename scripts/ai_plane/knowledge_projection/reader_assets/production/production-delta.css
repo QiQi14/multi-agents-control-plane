@@ -858,3 +858,186 @@
     max-block-size: min(40vh, 360px);
   }
 }
+
+/* ---------------------------------------------------------------- AGENT USAGE
+   The panel makes consumption visible in the surface people actually open. Its whole job is to
+   stay honest under glance-reading, so the visual language separates what is known from what is
+   guessed rather than averaging them into one comfortable number. */
+
+.usage-section .usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.usage-tool {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 14px 16px;
+}
+
+.usage-tool-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.usage-tool-head h4 {
+  margin: 0;
+  font: 600 14px/1.2 var(--font-ui);
+}
+
+.usage-tool-head .grow { flex: 1; }
+
+.usage-turns {
+  color: var(--ink-3);
+  font: 400 11.5px/1 var(--font-mono);
+}
+
+/* Measured and estimated must not read as the same class of fact at a glance. The estimate tag
+   carries a non-colour marker so the distinction survives greyscale and colour-vision differences. */
+.usage-tag {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font: 600 10px/1.6 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-2);
+}
+
+.usage-tag[data-measured="1"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+.usage-tag[data-measured="0"]::before {
+  content: "~ ";
+  font-weight: 700;
+}
+
+.usage-basis,
+.usage-assumption {
+  margin: 6px 0 0;
+  color: var(--ink-3);
+  font: 400 11.5px/1.45 var(--font-ui);
+}
+
+.usage-classes {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  margin: 10px 0 0;
+}
+
+.usage-classes > div {
+  display: contents;
+}
+
+.usage-classes dt {
+  color: var(--ink-2);
+  font: 400 12px/1.7 var(--font-ui);
+}
+
+.usage-classes dd {
+  margin: 0;
+  text-align: right;
+  font: 400 12px/1.7 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-cost {
+  margin: 10px 0 0;
+  padding-block-start: 8px;
+  border-block-start: 1px solid var(--line);
+  font: 400 13px/1.4 var(--font-ui);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.usage-rate,
+.usage-mid {
+  color: var(--ink-3);
+  font: 400 11px/1 var(--font-ui);
+}
+
+/* An unknown is a real answer here, not a missing value, so it stays legible instead of being
+   greyed to the edge of invisibility. */
+.usage-unknown {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.usage-unknown-block {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+  font: 400 12.5px/1.5 var(--font-ui);
+}
+
+.usage-range {
+  margin: 10px 0 0;
+  font: 600 15px/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.usage-empty {
+  padding: 16px 18px;
+}
+
+.usage-empty p { margin: 0 0 8px; }
+
+.usage-command code {
+  font: 400 12px/1.6 var(--font-mono);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.usage-foot {
+  margin-block-start: 10px;
+}
+
+/* Per-task attribution. An empty table here must never read as "these tasks were free", so the
+   coverage line sits with the table rather than in a footnote elsewhere. */
+.usage-attribution {
+  margin-block-start: 14px;
+}
+
+.usage-task-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font: 400 12.5px/1.5 var(--font-ui);
+}
+
+.usage-task-table th,
+.usage-task-table td {
+  text-align: start;
+  padding: 6px 10px;
+  border-block-end: 1px solid var(--line);
+}
+
+.usage-task-table thead th {
+  color: var(--ink-3);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 10.5px;
+}
+
+.usage-task-table .num {
+  text-align: end;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-task-table tbody th {
+  font-weight: 500;
+}

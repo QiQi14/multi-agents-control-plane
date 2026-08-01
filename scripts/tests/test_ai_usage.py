@@ -227,36 +227,87 @@ class PricingTests(unittest.TestCase):
 
 class EstimateTests(unittest.TestCase):
     def calibration(self):
-        return {"tokens_per_turn": 1000.0, "sample_turns": 500,
-                "sample_sessions": 2, "tools": ["claude"]}
+        return {"tokens_per_magnitude": 0.02, "spread_low": 0.01, "spread_high": 0.04,
+                "sample_sessions": 2, "sample_magnitude": 5_000, "tools": ["claude"],
+                "fit": "median of per-session ratios"}
 
     def test_estimate_is_a_range_that_states_its_assumption(self) -> None:
         guess = usage_module.estimate(
-            Usage(tool="antigravity", measured=False, turns=10), self.calibration())
+            Usage(tool="antigravity", measured=False, turns=10, magnitude=100_000),
+            self.calibration())
         self.assertLess(guess["low"], guess["tokens"])
         self.assertGreater(guess["high"], guess["tokens"])
         self.assertIn("NOT verified", guess["assumption"])
+        self.assertIn("claude", guess["assumption"], "the cross-tool fit must be named")
 
     def test_estimate_avoids_false_precision(self) -> None:
         guess = usage_module.estimate(
-            Usage(tool="antigravity", measured=False, turns=3677),
-            {"tokens_per_turn": 184883.3, "sample_turns": 1, "sample_sessions": 1, "tools": []})
-        # 679,815,894 would claim nine significant figures for a guess.
-        self.assertEqual(guess["tokens"], usage_module._round_significant(3677 * 184883.3))
-        self.assertNotEqual(guess["tokens"], int(3677 * 184883.3))
+            Usage(tool="antigravity", measured=False, turns=3677, magnitude=7_067_200_299),
+            self.calibration())
+        self.assertEqual(guess["tokens"],
+                         usage_module._round_significant(7_067_200_299 * 0.02))
+        self.assertNotEqual(guess["tokens"], int(7_067_200_299 * 0.02))
 
     def test_without_calibration_there_is_no_number(self) -> None:
-        guess = usage_module.estimate(Usage(tool="antigravity", measured=False, turns=10), None)
+        guess = usage_module.estimate(
+            Usage(tool="antigravity", measured=False, turns=10, magnitude=100), None)
         self.assertIsNone(guess["tokens"])
 
-    def test_calibration_uses_only_measured_sessions(self) -> None:
+    def test_an_unreadable_conversation_is_unknown_not_zero(self) -> None:
+        """magnitude 0 means the store could not be read, which is not the same as no work."""
+        guess = usage_module.estimate(
+            Usage(tool="antigravity", measured=False, turns=10, magnitude=0), self.calibration())
+        self.assertIsNone(guess["tokens"])
+        self.assertIn("could not be read", guess["reason"])
+
+    def test_a_longer_conversation_estimates_higher_at_equal_step_count(self) -> None:
+        """The whole point of the reshape: step count alone cannot separate these two."""
+        calibration = self.calibration()
+        short = usage_module.estimate(
+            Usage(tool="antigravity", measured=False, turns=50, magnitude=1_000_000), calibration)
+        long = usage_module.estimate(
+            Usage(tool="antigravity", measured=False, turns=50, magnitude=90_000_000), calibration)
+        self.assertGreater(long["tokens"], short["tokens"])
+
+    def test_calibration_uses_only_measured_sessions_with_magnitude(self) -> None:
         sessions = [
-            {"usage": Usage(tool="claude", measured=True, turns=2, output_tokens=1000)},
-            {"usage": Usage(tool="antigravity", measured=False, turns=999)},
+            {"usage": Usage(tool="claude", measured=True, turns=2, output_tokens=1000,
+                            magnitude=50_000)},
+            {"usage": Usage(tool="antigravity", measured=False, turns=999, magnitude=9_000_000)},
         ]
         calibration = usage_module.calibrate(sessions)
-        self.assertEqual(2, calibration["sample_turns"])
+        self.assertEqual(1, calibration["sample_sessions"])
         self.assertEqual(["claude"], calibration["tools"])
+
+    def test_a_single_sample_widens_the_band_instead_of_claiming_a_point(self) -> None:
+        """One measured session gives no observable spread. low == high would read as precision."""
+        one = {"usage": Usage(tool="claude", measured=True, turns=1, output_tokens=1000,
+                              magnitude=100_000)}
+        calibration = usage_module.calibrate([one])
+        self.assertEqual(calibration["spread_low"], calibration["spread_high"])
+        guess = usage_module.estimate(
+            Usage(tool="antigravity", measured=False, turns=5, magnitude=1_000_000), calibration)
+        self.assertLess(guess["low"], guess["high"], "a degenerate spread must still yield a range")
+        self.assertEqual("assumed", guess["band"])
+        self.assertIn("too small to observe a spread", guess["assumption"])
+
+    def test_calibration_median_resists_one_huge_session(self) -> None:
+        """A summed fit is dragged by the largest session; the median is not.
+
+        Three ordinary sessions share a ratio; one session a thousand times larger carries a very
+        different one. Total-over-total would land near the outlier's ratio.
+        """
+        def measured(tokens, magnitude):
+            return {"usage": Usage(tool="claude", measured=True, turns=1,
+                                   output_tokens=tokens, magnitude=magnitude)}
+        sessions = [measured(100, 10_000), measured(100, 10_000), measured(100, 10_000),
+                    measured(50_000_000, 10_000_000)]
+        calibration = usage_module.calibrate(sessions)
+        summed = sum(s["usage"].output_tokens for s in sessions) / sum(
+            s["usage"].magnitude for s in sessions)
+        self.assertAlmostEqual(0.01, calibration["tokens_per_magnitude"], places=6)
+        self.assertGreater(summed, calibration["tokens_per_magnitude"] * 2,
+                           "a summed fit should differ sharply, or this fixture proves nothing")
 
 
 class AdvisoryBoundaryTests(unittest.TestCase):

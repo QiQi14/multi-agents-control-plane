@@ -32,7 +32,8 @@ still change between minor versions.
 
 New since 0.1.0:
 
-- `ai usage show` reports what agent work consumed, from the records each tool already writes
+- `ai usage show` reports what agent work consumed, from the records each tool already writes;
+  `ai usage build` surfaces the same report in the reader
   locally. Tokens where a tool records them, subscription quota where it reports it, a labelled
   estimate where it records neither, and unknown rather than zero where nothing can be measured.
 - `ai docs sync` refreshes the reader's task data in place, so reading a task you just finished no
@@ -193,6 +194,28 @@ Rates are yours, in `.ai/.local/billing.json`, and each one must carry an `as_of
 None ship with the plane — a price is a fact with a short shelf life, and a stale rate that looks
 authoritative is worse than no rate at all. Usage is advisory throughout: it never changes which tool
 a task routes to.
+
+The same report is available in the reader, on the Overview screen:
+
+```bash
+ai usage build
+```
+
+It is deliberately **not** part of `ai docs build`. That build is a deterministic projection of the
+repository and its output is meant to travel — `ai docs export` exists to be handed to someone with
+no checkout. Usage is per-machine data read from your home directory, so it is a separate, opt-in
+command, and the asset it writes carries per-tool aggregates only: no working-directory path,
+session id, or branch. `docs build` leaves the panel in a *not built* state rather than showing a
+zero.
+
+A tool that records no tokens is estimated from how far its own conversation grew — the summed
+running prefix, which is the area under the transcript rather than its length, because an agent
+re-reads its accumulated context every step. The constant is calibrated against tools that do
+report, and the result stays a labelled range whose assumptions are printed with it.
+
+Per-task attribution is joined only through a `session_id` an agent recorded in its receipt. It is
+never inferred from branch or timing: a wrong attribution reads as a fact, and the reader reports
+how many tasks are attributable so an empty table cannot be mistaken for no spend.
 
 ### 10. Documentation you can read, and reports you can send
 
@@ -419,7 +442,7 @@ and the installer warns you before that happens. Move anything hand-written into
 | Tasks | `tasks`, `task show`, `dispatch`, `review`, `qa`, `merge`, `learn`, `archive` |
 | Verification | `verify`, `cargo`, `cargo-cache`, `impact` |
 | Extensions | `ext list`, `ext run`, `tools list`, `tools configure` |
-| Usage | `usage show` |
+| Usage | `usage show`, `usage build` |
 | Skill packs | `skills list`, `skills add`, `skills remove` |
 | Documentation | `docs build`, `docs sync`, `docs export`, `docs lint`, `docs search`, `docs stats`, `docs graph`, `docs graph --tasks` |
 | Hand-authored specs | `blueprint init`, `blueprint build` |
