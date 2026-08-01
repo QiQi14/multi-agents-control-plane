@@ -231,6 +231,28 @@
   min-height: 0;
 }
 
+.task-graph-page {
+  max-width: none;
+  height: calc(100vh - 54px);
+  padding: var(--space-4) 0 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.task-graph-page > .section-head {
+  margin-inline: var(--space-5);
+}
+
+.task-graph-page > .view-switch {
+  margin-inline: var(--space-5);
+}
+
+.task-graph-page .graph-screen {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
 .graph-search-panel input {
   width: min(220px, 24vw);
   height: 28px;
@@ -581,6 +603,13 @@
   margin-top: 12px;
 }
 
+@media (max-width: 1024px) {
+  .task-graph-page {
+    height: auto;
+    padding-bottom: var(--space-7);
+    overflow: visible;
+  }
+}
 @media (max-width: 860px) {
   .relgroups--receipts {
     grid-template-columns: minmax(0, 1fr);
@@ -620,6 +649,196 @@
   border-color: var(--line-strong);
 }
 
+/* The legend is also the compact facet control. Its glyphs keep explaining graph encoding while
+   the enclosing button supplies keyboard focus, pressed state, and a large enough click target. */
+.graph-filter-legend {
+  box-sizing: border-box;
+  inline-size: min(var(--legend-inline-size, 260px), 46%);
+  max-inline-size: min(440px, calc(100% - 2 * var(--space-3)));
+  max-block-size: min(55%, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.graph-filter-legend .legend-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  margin: 0;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.graph-filter-legend .legend-toggle:hover,
+.graph-filter-legend .legend-toggle:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--surface-sunken);
+  outline: none;
+}
+
+.graph-filter-legend .legend-toggle[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.graph-filter-legend .legend-toggle[aria-pressed="true"]::after {
+  content: "\2713";
+  margin-left: auto;
+  color: var(--accent-ink);
+  font-weight: 750;
+}
+
+.graph-filter-legend .legend-toggle[aria-pressed="false"] {
+  opacity: .46;
+}
+
+.graph-filter-legend .legend-toggle[aria-pressed="false"] i {
+  filter: grayscale(1);
+}
+
+.graph-filter-legend .legend-types,
+.graph-filter-legend .legend-edges {
+  display: grid;
+  grid-template-columns: repeat(var(--legend-columns, 1), minmax(0, 1fr));
+  gap: 2px 4px;
+}
+
+.graph-filter-legend .legend-types {
+  margin-bottom: 8px;
+}
+
+.graph-filter-legend .legend-toggle {
+  width: 100%;
+  min-width: 0;
+}
+
+.graph-filter-legend .legend-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.graph-filter-legend .legend-types .legend-toggle i {
+  flex: 0 0 8px;
+}
+
+.graph-filter-legend .legend-edges .legend-toggle i {
+  flex: 0 0 22px;
+}
+
+.graph-filter-legend .task-link-line {
+  height: 2px;
+  border: 0;
+  background: var(--edge);
+}
+
+.graph-filter-legend .task-link-dependsOn {
+  background: var(--edge);
+}
+
+.graph-filter-legend .task-link-blockedBy {
+  background: repeating-linear-gradient(90deg, var(--edge) 0 2px, transparent 2px 6px);
+}
+
+.graph-filter-legend .task-link-decomposedInto {
+  background: repeating-linear-gradient(90deg, var(--edge) 0 10px, transparent 10px 14px);
+}
+
+.graph-filter-legend .task-link-slices {
+  height: 4px;
+  border-block: 1px solid var(--edge);
+  background: none;
+}
+
+.graph-filter-legend .task-link-sliceRef {
+  background: repeating-linear-gradient(90deg, var(--edge) 0 1px, transparent 1px 6px);
+}
+
+.graph-filter-legend .task-link-informedBy {
+  background: repeating-linear-gradient(90deg, var(--edge) 0 6px, transparent 6px 10px);
+}
+
+.graph-filter-legend .task-link-parallelWith {
+  height: 3px;
+  background:
+    repeating-linear-gradient(90deg, var(--edge) 0 12px, transparent 12px 16px,
+      var(--edge) 16px 18px, transparent 18px 22px);
+}
+
+.graph-task-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.graph-task-card .graph-reader-head .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-3);
+}
+
+.graph-task-summary,
+.graph-task-scope,
+.graph-task-relations {
+  margin-bottom: var(--space-4);
+}
+
+.graph-task-summary h3,
+.graph-task-scope h3,
+.graph-task-relations h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-3);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.graph-task-summary p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+
+.graph-task-facts {
+  margin-bottom: var(--space-4);
+}
+
+.graph-task-relations .truth-list {
+  margin: 0;
+}
+
+.graph-task-relations .truth-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.graph-task-relations .truth-list a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-task-open {
+  margin: var(--space-5) 0 0;
+}
+
 /* The group label sits above its row rather than inline, so a wrapped row of seven toggles still
    reads as one control instead of trailing off from a word. */
 .graph-controls .panel > .rel-kind {
@@ -630,4 +849,12 @@
   text-transform: uppercase;
   letter-spacing: .04em;
   font-size: 10.5px;
+}
+
+@media (max-width: 720px) {
+  .graph-filter-legend {
+    inline-size: auto;
+    max-inline-size: none;
+    max-block-size: min(40vh, 360px);
+  }
 }

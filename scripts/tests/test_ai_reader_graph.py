@@ -147,6 +147,186 @@ class ToggleStateTests(unittest.TestCase):
         self.assertIn("✓", marker.group(1))
 
 
+class CompactLegendTests(unittest.TestCase):
+    def test_task_facets_live_in_the_task_legend(self) -> None:
+        source = app().split("function screenTasksGraph() {", 1)[1].split(
+            "function screenTasks() {", 1)[0]
+        self.assertIn('class="page task-graph-page"', source)
+        self.assertIn('aria-label="Task graph filters"', source)
+        self.assertIn(".task-graph-page {", css())
+        self.assertIn('class="legend-toggle"', source)
+        self.assertIn('data-life=', source)
+        self.assertIn('data-link=', source)
+        self.assertNotIn('<span class="rel-kind">Lifecycle</span>', source)
+        self.assertNotIn('<span class="rel-kind">Links</span>', source)
+
+    def test_document_facets_live_in_the_document_legend(self) -> None:
+        source = app().split("function screenGraph() {", 1)[1].split(
+            "function screenProject() {", 1)[0]
+        self.assertIn('aria-label="Document graph filters"', source)
+        self.assertIn('data-doc-type=', source)
+        self.assertIn('data-doc-prov=', source)
+        self.assertNotIn('id="graph-type"', source)
+        self.assertNotIn('data-prov=', source)
+
+    def test_legend_toggle_state_is_visibly_and_nonchromatically_distinct(self) -> None:
+        rules = css()
+        for state in ("true", "false"):
+            self.assertIn(
+                f'.graph-filter-legend .legend-toggle[aria-pressed="{state}"] {{',
+                rules,
+            )
+        pressed_marker = (
+            '.graph-filter-legend .legend-toggle[aria-pressed="true"]::after {'
+        )
+        self.assertIn(pressed_marker, rules)
+        self.assertIn('content:', rules.split(pressed_marker, 1)[1].split("}", 1)[0])
+
+    def test_legend_layout_is_content_measured_and_canvas_bounded(self) -> None:
+        source = app()
+        rules = css()
+        self.assertIn("function measureLegendToggle(button)", source)
+        self.assertIn("var measurementHost = button.parentElement", source)
+        self.assertIn("measurementHost.appendChild(clone)", source)
+        self.assertNotIn("document.body.appendChild(clone)", source)
+        self.assertIn("function fitGraphLegend(legend)", source)
+        self.assertIn("new ResizeObserver(schedule)", source)
+        self.assertIn("Math.floor(wrap.clientWidth * 0.46)", source)
+        self.assertIn("repeat(var(--legend-columns, 1), minmax(0, 1fr))", rules)
+        self.assertIn("inline-size: min(var(--legend-inline-size, 260px), 46%)", rules)
+        self.assertIn("max-block-size: min(55%, 420px)", rules)
+        legend_block = rules.split(".graph-filter-legend {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("scrollbar-gutter", legend_block)
+        label_block = rules.split(
+            ".graph-filter-legend .legend-toggle span {", 1
+        )[1].split("}", 1)[0]
+        self.assertIn("white-space: nowrap", label_block)
+        self.assertIn("text-overflow: ellipsis", label_block)
+        self.assertNotIn("overflow-wrap: anywhere", label_block)
+        self.assertIn("overflow: auto", rules)
+
+
+
+class SearchFocusTests(unittest.TestCase):
+    def test_search_is_not_part_of_topology_visibility(self) -> None:
+        visible = app().split("function visible(node) {", 1)[1].split(
+            "function matchesSearch(node, terms) {", 1
+        )[0]
+        self.assertNotIn("filters.q", visible)
+        self.assertNotIn("scoreDoc", visible)
+        self.assertIn("function matchesSearch(node, terms)", app())
+
+    def test_task_search_is_separate_from_lifecycle_visibility(self) -> None:
+        source = app().split("function taskGraphDataset() {", 1)[1].split(
+            "function renderTaskGraphReader", 1
+        )[0]
+        self.assertIn("activeTaskLifecycles(filters.life)", source)
+        self.assertIn("searchMatches: function (node, terms)", source)
+        matches = source.split("matches: function (node, filters) {", 1)[1].split(
+            "searchMatches:", 1
+        )[0]
+        self.assertNotIn("filters.q", matches)
+
+    def test_search_dims_context_instead_of_removing_it(self) -> None:
+        source = app()
+        self.assertIn("var searchFocus = {};", source)
+        self.assertIn("var searchNeighbours = {};", source)
+        self.assertIn("var searchDim =", source)
+        self.assertIn("var live = searchTerms.length ? searchLive : selectedLive;", source)
+        self.assertNotIn("var searchDim = !selected", source)
+        self.assertIn("ctx.globalAlpha = focused ? (live ? 1 : 0.18) : 0.72;", source)
+
+
+class TaskFreezeTests(unittest.TestCase):
+    def test_task_graph_is_frozen_by_default_and_exposes_a_toggle(self) -> None:
+        source = app()
+        helper = source.split("function taskGraphFrozen(value) {", 1)[1].split(
+            "function toggleExclusiveGraphFacet", 1
+        )[0]
+        self.assertIn("value !== '0'", helper)
+        self.assertIn("data-task-freeze", source)
+        self.assertIn("Freeze layout", source)
+
+    def test_task_actions_reuse_the_mounted_canvas(self) -> None:
+        source = app()
+        self.assertIn("var sameTaskGraph =", source)
+        block = source.split("if (sameTaskGraph) {", 1)[1].split(
+            "if (hadGraph) graph.teardown();", 1
+        )[0]
+        self.assertIn("graph.setFrozen", block)
+        self.assertIn("graph.setFilters", block)
+        self.assertIn("graph.setSelection", block)
+        self.assertNotIn("graph.init", block)
+
+    def test_freezing_cancels_simulation_and_clears_velocity(self) -> None:
+        body = app().split("function setFrozen(next) {", 1)[1].split(
+            "function graphStats() {", 1
+        )[0]
+        self.assertIn("cancelAnimationFrame", body)
+        self.assertIn("node.vx = 0; node.vy = 0", body)
+        self.assertIn("animate(60)", body)
+
+    def test_task_remount_restores_cached_layout_without_full_warmup(self) -> None:
+        source = app()
+        dataset = source.split("function taskGraphDataset() {", 1)[1].split(
+            "function renderTaskGraphReader", 1
+        )[0]
+        self.assertIn("layoutKey: 'tasks'", dataset)
+        self.assertIn("initialTicks: 160", dataset)
+        self.assertIn("layoutCache[source.layoutKey]", source)
+        self.assertIn("initialTickCount = restoredLayout ? 0", source)
+        self.assertIn("layoutState: graphLayoutState", source)
+
+
+
+class TaskGraphPresentationTests(unittest.TestCase):
+    def test_task_graph_uses_the_full_reader_width(self) -> None:
+        rules = css().split(".task-graph-page {", 1)[1].split("}", 1)[0]
+        self.assertIn("max-width: none", rules)
+        self.assertIn("padding: var(--space-4) 0 0", rules)
+        self.assertIn(".task-graph-page .graph-screen", css())
+        self.assertIn("width: 100%", css().split(".task-graph-page .graph-screen", 1)[1].split("}", 1)[0])
+
+    def test_selected_task_panel_uses_governed_human_and_execution_context(self) -> None:
+        source = app().split("function renderTaskGraphReader(id) {", 1)[1].split(
+            "function screenTasksGraph() {", 1
+        )[0]
+        for expected in (
+            "taskPresentation(task)", "Required outcome", "Preferred tool", "Review tool",
+            "Scope", "Waits on", "Waited on by", "Open full task", "graphTaskHash",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, source)
+
+
+class TaskRelationStyleTests(unittest.TestCase):
+    def test_all_task_relation_kinds_have_distinct_canvas_patterns(self) -> None:
+        block = app().split("var TASK_LINKS = [", 1)[1].split("];", 1)[0]
+        entries = block.split("{ key: '")[1:]
+        patterns = []
+        for entry in entries:
+            key = entry.split("'", 1)[0]
+            dash = entry.split("dash: [", 1)[1].split("]", 1)[0].strip()
+            width = entry.split("width:", 1)[1].split("}", 1)[0].strip(" ,")
+            patterns.append((key, dash, width))
+        self.assertEqual(7, len(patterns))
+        signatures = {(dash, width) for _key, dash, width in patterns}
+        self.assertEqual(7, len(signatures), "task relation styles must be visually distinct")
+        self.assertIn("edgeStyle: function (edge)", app())
+        self.assertIn("style ? style.dash", app())
+
+    def test_every_task_relation_pattern_is_mirrored_in_the_legend(self) -> None:
+        source = app()
+        rules = css()
+        for key in (
+            "dependsOn", "blockedBy", "decomposedInto", "slices", "sliceRef",
+            "informedBy", "parallelWith",
+        ):
+            with self.subTest(key=key):
+                self.assertIn("task-link-' + link.key", source)
+                self.assertIn(f".task-link-{key}", rules)
+
+
 class AssetIntegrityTests(unittest.TestCase):
     def test_reader_sources_contain_no_control_bytes(self) -> None:
         # A shell round trip wrote a NUL into the stylesheet twice while this surface was built,

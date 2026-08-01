@@ -1213,13 +1213,16 @@
   // Drawable task relations. Counts on this corpus: dependsOn 455, sliceRef 194,
   // decomposedInto 27, slices 18, informedBy 15, parallelWith 13, blockedBy 1.
   var TASK_LINKS = [
-    { key: 'dependsOn', label: 'depends on', on: true },
-    { key: 'blockedBy', label: 'blocked by', on: true },
-    { key: 'decomposedInto', label: 'decomposed into', on: true, reverse: true },
-    { key: 'slices', label: 'slices', on: false, reverse: true },
-    { key: 'sliceRef', label: 'slice of', on: false },
-    { key: 'informedBy', label: 'informed by', on: false },
-    { key: 'parallelWith', label: 'parallel with', on: false }
+    { key: 'dependsOn', label: 'depends on', on: true, dash: [], width: 1.25 },
+    { key: 'blockedBy', label: 'blocked by', on: true, dash: [2, 4], width: 1.4 },
+    { key: 'decomposedInto', label: 'decomposed into', on: true, reverse: true,
+      dash: [10, 4], width: 1.4 },
+    { key: 'slices', label: 'slices', on: false, reverse: true,
+      dash: [10, 3, 2, 3], width: 1.5 },
+    { key: 'sliceRef', label: 'slice of', on: false, dash: [1, 5], width: 1 },
+    { key: 'informedBy', label: 'informed by', on: false, dash: [6, 4], width: 1.15 },
+    { key: 'parallelWith', label: 'parallel with', on: false,
+      dash: [12, 4, 2, 4], width: 1.6 }
   ];
 
   var NO_TASK_LINKS = 'none';
@@ -1269,6 +1272,18 @@
     return on.length ? on.join(',') : NO_TASK_LINKS;
   }
 
+  function taskGraphFrozen(value) {
+    // A stable task graph is the useful default: its topology is large, and rebuilding the force
+    // layout after every facet action makes the reader lose the place they were inspecting.
+    return value !== '0';
+  }
+
+  function toggleExclusiveGraphFacet(value, key) {
+    // Document facets remain single-select. In the legend, an unfiltered set reads as every item
+    // being on; choosing one isolates it, and choosing the isolated item again restores the set.
+    return value === key ? '' : key;
+  }
+
   function taskViewSwitch(view) {
     return '<div class="view-switch" role="group" aria-label="Task view" ' +
       'style="margin-bottom:var(--space-4)">' +
@@ -1311,6 +1326,8 @@
       });
     });
     return {
+      layoutKey: 'tasks',
+      initialTicks: 160,
       nodes: DATA.tasks.map(function (task) {
         return { id: task.id, title: task.title || task.id, type: task.lifecycle,
                  degree: degree[task.id] || 0, group: task.featureKey || '' };
@@ -1318,6 +1335,12 @@
       edges: edges,
       types: ['queued', 'active', 'done', 'archived'],
       edgeVisible: function (edge, f) { return activeTaskLinks(f.links).indexOf(edge.kind) >= 0; },
+      edgeStyle: function (edge) {
+        for (var i = 0; i < TASK_LINKS.length; i++) {
+          if (TASK_LINKS[i].key === edge.kind) return TASK_LINKS[i];
+        }
+        return null;
+      },
       typeColour: {
         queued: 'hsl(var(--h-queued, 222) 78% 58%)',
         active: 'hsl(var(--h-active, 33) 92% 55%)',
@@ -1326,13 +1349,16 @@
       },
       corpusOf: function () { return ''; },
       onSelect: function (id) { renderTaskGraphReader(id); },
+      reheatOnFilter: true,
       matches: function (node, filters) {
         var task = byId[node.id];
         if (!task) return false;
         if (activeTaskLifecycles(filters.life).indexOf(task.lifecycle) < 0) return false;
-        var terms = tokens(filters.q || '');
-        if (terms.length && scoreTask(task, terms) <= 0) return false;
         return true;
+      },
+      searchMatches: function (node, terms) {
+        var task = byId[node.id];
+        return !!task && scoreTask(task, terms) > 0;
       }
     };
   }
@@ -1344,32 +1370,155 @@
     if (!task) {
       host.innerHTML =
         '<div class="placeholder"><p><strong>Select a task.</strong></p>' +
-        '<p>Click any node to read its contract here, and to see what it waits on and what waits ' +
-        'on it. Drag a node to reposition it, drag the background to pan, scroll to zoom.</p></div>';
+        '<p>Click any node to inspect its purpose, outcome, delivery context, and immediate ' +
+        'relationships. Drag a node to reposition it, drag the background to pan, scroll to zoom.</p>' +
+        '<p class="rel-kind">' + plural(DATA.tasks.length, 'task contract') +
+        ' in this snapshot</p></div>';
       return;
     }
+
     var rel = task.rel || {};
+    var p = taskPresentation(task);
+    var authored = p.state === 'authored';
+    var summary = authored ? (p.outcome || p.purpose || '') :
+      ((p.unavailable && p.unavailable.label) || 'Human presentation unavailable');
+    var scope = authored && Array.isArray(p.scope) ? p.scope : [];
+    var delivery = p.delivery || {};
+    var waits = (rel.dependsOn || []).concat(rel.blockedBy || []);
+
+    function graphTaskHash(taskId) {
+      return buildHash('tasks', '', {
+        view: 'graph', sel: taskId, q: state.query.q || '', life: state.query.life || '',
+        links: state.query.links || '', freeze: state.query.freeze || ''
+      });
+    }
+
     function list(label, ids) {
       if (!ids || !ids.length) return '';
-      return '<div style="margin-top:var(--space-3)"><strong>' + label + '</strong>' +
-        '<ul class="truth-list">' + ids.map(function (x) {
-          return '<li><a href="' + buildHash('task', x, {}) + '">' + esc(x) + '</a></li>';
-        }).join('') + '</ul></div>';
+      return '<section class="graph-task-relations"><h3>' + label + '</h3>' +
+        '<ul class="truth-list">' + ids.slice(0, 8).map(function (item) {
+          var taskId = typeof item === 'string' ? item : (item && (item.id || item.ref));
+          var related = taskById[taskId];
+          return '<li><a href="' + graphTaskHash(taskId) + '">' +
+            esc(related ? taskTitle(related) : taskId) + '</a>' +
+            (related ? '<span class="rel-kind">' +
+              esc(LIFE_LABEL[related.lifecycle] || related.lifecycle) + '</span>' : '') + '</li>';
+        }).join('') + '</ul>' +
+        (ids.length > 8 ? '<p class="rel-kind">+' + (ids.length - 8) + ' more in the full task</p>' : '') +
+        '</section>';
     }
+
     host.innerHTML =
-      '<article class="card" style="padding:var(--space-4)">' +
-        '<h3>' + esc(task.title || task.id) + '</h3>' +
-        '<p class="rel-kind">' + esc(task.lifecycleLabel || task.lifecycle) + '</p>' +
-        '<dl class="truth-kv">' +
-          '<div><dt>Id</dt><dd>' + esc(task.id) + '</dd></div>' +
-          (task.featureLabel
-            ? '<div><dt>Feature</dt><dd>' + esc(task.featureLabel) + '</dd></div>' : '') +
-        '</dl>' +
-        list('Waits on', rel.dependsOn) +
-        list('Waited on by', rel.blocks) +
-        '<p style="margin-top:var(--space-4)">' +
-          '<a class="btn" href="' + buildHash('task', task.id, {}) + '">Open task</a></p>' +
+      '<article class="graph-task-card" data-state="' + esc(p.state || 'legacy-unavailable') + '">' +
+        '<header class="graph-reader-head">' +
+          '<p class="eyebrow">' + esc(LIFE_LABEL[task.lifecycle] || task.lifecycle) + ' task</p>' +
+          '<h2>' + esc(taskTitle(task)) + '</h2>' +
+          '<p class="idline">' + esc(task.id) + '</p>' +
+          '<div class="meta">' +
+            chip(task.lifecycle, LIFE_LABEL[task.lifecycle] || task.lifecycle, { dot: true }) +
+            (taskRisk(task) ? chip(taskRisk(task).split(' ')[0], 'risk: ' + taskRisk(task)) : '') +
+            (delivery.label ? '<span class="micro">' + esc(delivery.label) + '</span>' : '') +
+          '</div>' +
+        '</header>' +
+        '<div class="graph-reader-body">' +
+          '<section class="graph-task-summary"><h3>Required outcome</h3>' +
+            '<p>' + esc(summary || 'No human-facing outcome is recorded.') + '</p></section>' +
+          '<dl class="truth-kv graph-task-facts">' +
+            (taskFeatureLabel(task)
+              ? '<div><dt>Feature</dt><dd>' + esc(taskFeatureLabel(task)) + '</dd></div>' : '') +
+            (taskTool(task)
+              ? '<div><dt>Preferred tool</dt><dd>' + esc(taskTool(task)) + '</dd></div>' : '') +
+            (taskReviewTool(task)
+              ? '<div><dt>Review tool</dt><dd>' + esc(taskReviewTool(task)) + '</dd></div>' : '') +
+            '<div><dt>Relationships</dt><dd>' +
+              ((rel.dependsOn || []).length + (rel.blocks || []).length) + ' immediate</dd></div>' +
+          '</dl>' +
+          (scope.length
+            ? '<section class="graph-task-scope"><h3>Scope</h3><ul class="limit-list">' +
+                scope.slice(0, 3).map(function (item) { return '<li>' + esc(item) + '</li>'; }).join('') +
+              '</ul></section>'
+            : '') +
+          list('Waits on', waits) +
+          list('Waited on by', rel.blocks || []) +
+          '<p class="graph-task-open"><a class="btn" href="' +
+            buildHash('task', task.id, {}) + '">Open full task</a></p>' +
+        '</div>' +
       '</article>';
+  }
+  var legendResizeObserver = null;
+  var legendLayoutFrame = null;
+
+  function stopGraphLegendLayout() {
+    if (legendResizeObserver) legendResizeObserver.disconnect();
+    legendResizeObserver = null;
+    if (legendLayoutFrame) cancelAnimationFrame(legendLayoutFrame);
+    legendLayoutFrame = null;
+  }
+
+  function measureLegendToggle(button) {
+    var clone = button.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.style.position = 'fixed';
+    clone.style.inset = '0 auto auto -10000px';
+    clone.style.display = 'inline-flex';
+    clone.style.width = 'max-content';
+    clone.style.maxWidth = 'none';
+    clone.style.visibility = 'hidden';
+    clone.style.pointerEvents = 'none';
+    var label = clone.querySelector('span');
+    if (label) label.style.whiteSpace = 'nowrap';
+    var measurementHost = button.parentElement;
+    measurementHost.appendChild(clone);
+    var width = Math.ceil(clone.getBoundingClientRect().width);
+    measurementHost.removeChild(clone);
+    return width;
+  }
+
+  function layoutGraphLegend(legend) {
+    if (!legend || !legend.isConnected) return;
+    var wrap = legend.closest('.graph-canvas-wrap');
+    if (!wrap) return;
+    var hardCap = Math.min(440, Math.floor(wrap.clientWidth * 0.46));
+    var legendChrome = 26; // two-sided padding and border; no unused scrollbar gutter
+    var contentCap = Math.max(120, hardCap - legendChrome);
+    var desired = 0;
+
+    legend.querySelectorAll('.legend-types, .legend-edges').forEach(function (group) {
+      var buttons = Array.prototype.slice.call(group.querySelectorAll('.legend-toggle'));
+      if (!buttons.length) return;
+      var natural = buttons.map(measureLegendToggle);
+      var isTypes = group.classList.contains('legend-types');
+      var columnWidth = Math.min(240, Math.max(isTypes ? 82 : 0,
+        Math.max.apply(Math, natural)));
+      var columns = Math.min(buttons.length, isTypes ? 3 : 2);
+      while (columns > 1 && columns * columnWidth + (columns - 1) * 4 > contentCap) {
+        columns -= 1;
+      }
+      group.style.setProperty('--legend-columns', columns);
+      desired = Math.max(desired,
+        Math.min(contentCap, columns * columnWidth + (columns - 1) * 4));
+    });
+
+    legend.style.setProperty('--legend-inline-size',
+      Math.max(140, Math.min(hardCap, desired + legendChrome)) + 'px');
+  }
+
+  function fitGraphLegend(legend) {
+    stopGraphLegendLayout();
+    if (!legend) return;
+    var wrap = legend.closest('.graph-canvas-wrap');
+    var schedule = function () {
+      if (legendLayoutFrame) cancelAnimationFrame(legendLayoutFrame);
+      legendLayoutFrame = requestAnimationFrame(function () {
+        legendLayoutFrame = null;
+        layoutGraphLegend(legend);
+      });
+    };
+    if (window.ResizeObserver && wrap) {
+      legendResizeObserver = new ResizeObserver(schedule);
+      legendResizeObserver.observe(wrap);
+    }
+    schedule();
   }
 
   function screenTasksGraph() {
@@ -1379,7 +1528,7 @@
     var lifeOn = activeTaskLifecycles(state.query.life);
     var dataset = taskGraphDataset();
     main.innerHTML =
-      '<div class="page">' +
+      '<div class="page task-graph-page">' +
         '<div class="section-head"><h2>Task contracts</h2>' +
         '<span class="hint">' + dataset.nodes.length + ' tasks, ' + dataset.edges.length +
         ' dependency links. Drag a node, drag the background to pan, scroll to zoom.</span></div>' +
@@ -1392,35 +1541,40 @@
                 '<button class="icon-btn" type="button" data-graph="fit">Fit</button>' +
                 '<button class="icon-btn" type="button" data-graph="in" aria-label="Zoom in">+</button>' +
                 '<button class="icon-btn" type="button" data-graph="out" aria-label="Zoom out">-</button>' +
+                '<button class="icon-btn" type="button" data-task-freeze aria-pressed="' +
+                  taskGraphFrozen(state.query.freeze) + '">Freeze layout</button>' +
               '</div>' +
               '<div class="panel graph-search-panel">' +
                 '<label class="sr-only" for="graph-q">Search tasks</label>' +
                 '<input id="graph-q" type="search" placeholder="Search tasks..." value="' +
                 esc(state.query.q || '') + '">' +
               '</div>' +
-              '<div class="panel">' +
-                '<span class="rel-kind">Lifecycle</span>' +
-                TASK_LIFECYCLES.map(function (k) {
-                  return '<button class="icon-btn" type="button" data-life="' + k +
-                    '" aria-pressed="' + (lifeOn.indexOf(k) >= 0) + '">' + k + '</button>';
-                }).join('') +
-              '</div>' +
-              '<div class="panel">' +
-                '<span class="rel-kind">Links</span>' +
-                TASK_LINKS.map(function (link) {
-                  return '<button class="icon-btn" type="button" data-link="' + link.key +
-                    '" aria-pressed="' + (on.indexOf(link.key) >= 0) + '">' +
-                    esc(link.label) + '</button>';
-                }).join('') +
-              '</div>' +
+            '</div>' +
+            '<div class="graph-legend graph-filter-legend" aria-label="Task graph filters">' +
+              '<h3>Lifecycle</h3>' +
+              '<div class="legend-types">' + TASK_LIFECYCLES.map(function (k) {
+                return '<button class="legend-toggle" type="button" data-life="' + k +
+                  '" aria-pressed="' + (lifeOn.indexOf(k) >= 0) +
+                  '" style="--h: var(--h-' + k + ', 220)"><i aria-hidden="true"></i><span>' +
+                  k + '</span></button>';
+              }).join('') + '</div>' +
+              '<h3>Links</h3>' +
+              '<div class="legend-edges">' + TASK_LINKS.map(function (link) {
+                return '<button class="legend-toggle" type="button" data-link="' + link.key +
+                  '" aria-pressed="' + (on.indexOf(link.key) >= 0) +
+                  '"><i class="task-link-line task-link-' + link.key +
+                  '" aria-hidden="true"></i><span>' + esc(link.label) + '</span></button>';
+              }).join('') + '</div>' +
             '</div>' +
           '</div>' +
           '<aside class="graph-reader" id="graph-reader"></aside>' +
         '</div>' +
       '</div>';
 
+    fitGraphLegend(main.querySelector('[aria-label="Task graph filters"]'));
     graph.init(document.getElementById('graph-wrap'), sel,
-      { q: state.query.q || '', life: life, links: on.length ? on.join(',') : NO_TASK_LINKS }, dataset);
+      { q: state.query.q || '', life: life, links: on.length ? on.join(',') : NO_TASK_LINKS,
+        frozen: taskGraphFrozen(state.query.freeze) }, dataset);
     renderTaskGraphReader(sel);
 
     bindTaskViewSwitch();
@@ -1443,9 +1597,20 @@
           button.getAttribute('data-life')) });
       });
     });
+    var freeze = main.querySelector('[data-task-freeze]');
+    if (freeze) {
+      freeze.addEventListener('click', function () {
+        setQuery({ freeze: taskGraphFrozen(state.query.freeze) ? '0' : '' });
+      });
+    }
     var search = main.querySelector('#graph-q');
     if (search) {
-      search.addEventListener('input', function () { setQuery({ q: search.value }); });
+      var timer = null;
+      search.addEventListener('input', function () {
+        clearTimeout(timer);
+        var value = search.value;
+        timer = setTimeout(function () { setQuery({ q: value }, true); }, 160);
+      });
     }
   }
 
@@ -1963,8 +2128,12 @@
   var graph = (function () {
     var nodes = null, edges = null, canvas = null, ctx = null, raf = null;
     var source = null;
+    var layoutCache = {};
+    var restoredLayout = false;
+    var initialTickCount = 0;
     var view = { x: 0, y: 0, k: 1 };
     var drag = null, panning = null, hover = null, selected = null;
+    var frozen = false;
     var colours = {};
     var filters = { prov: '', type: '' };
     var reduceMotion = window.matchMedia &&
@@ -2017,16 +2186,22 @@
 
     function init(container, initialSelection, initialFilters, dataset) {
       filters = initialFilters;
+      frozen = !!initialFilters.frozen;
       source = dataset || documentDataset();
+      var cached = source.layoutKey && layoutCache[source.layoutKey];
+      restoredLayout = !!cached && source.nodes.every(function (n) { return !!cached[n.id]; });
       // Deterministic starting positions: a golden-angle spiral in registry
-      // order. Same snapshot -> same layout, every time, no seeded RNG needed.
+      // order. Task layouts can restore their last positions when remounted; document datasets
+      // retain their existing initialization path because they do not opt into a layout key.
       nodes = source.nodes.map(function (n, i) {
         var angle = i * 2.399963;
         var radius = 26 * Math.sqrt(i + 1);
+        var saved = restoredLayout ? cached[n.id] : null;
         return {
           id: n.id, title: n.title, type: n.type, degree: n.degree, group: n.group,
           corpus: source.corpusOf ? source.corpusOf(n) : '',
-          x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, vx: 0, vy: 0
+          x: saved ? saved.x : Math.cos(angle) * radius,
+          y: saved ? saved.y : Math.sin(angle) * radius, vx: 0, vy: 0
         };
       });
       var index = {};
@@ -2042,12 +2217,14 @@
       ctx = canvas.getContext('2d');
       readColours();
       resize();
-      for (var i = 0; i < 400; i++) tick(1);
+      initialTickCount = restoredLayout ? 0 :
+        (typeof source.initialTicks === 'number' ? source.initialTicks : 400);
+      for (var i = 0; i < initialTickCount; i++) tick(1);
       fit();
       selected = initialSelection && index[initialSelection] ? index[initialSelection] : null;
       if (selected && !visible(selected)) selected = null;
       bind();
-      if (!reduceMotion) animate(60);
+      if (!frozen && !reduceMotion) animate(60);
       else draw();
       window.addEventListener('resize', onResize);
       return { index: index };
@@ -2105,8 +2282,11 @@
 
     function animate(frames) {
       if (raf) cancelAnimationFrame(raf);
+      raf = null;
+      if (frozen || reduceMotion) { draw(); return; }
       var left = frames;
       function step() {
+        if (frozen) { raf = null; draw(); return; }
         tick(0.85);
         draw();
         left--;
@@ -2133,16 +2313,20 @@
     function visible(node) {
       if (filters.corpus && node.corpus !== filters.corpus && !bridgeNeighbour(node)) return false;
       if (filters.type && node.type !== filters.type) return false;
-      // The dataset owns what its own nodes mean, so search and facet filtering ask it rather than
-      // assuming every node is a document. Without a dataset match function a node stays visible:
-      // a corpus that cannot answer a filter must not silently empty the canvas.
+      // Facets own topology. Search deliberately does not: it focuses matches while retaining the
+      // surrounding graph, so a reader can still see how the result connects to everything else.
       if (source && source.matches) return source.matches(node, filters);
       var doc = docById[node.id];
       if (filters.group && (!doc || doc.group !== filters.group)) return false;
       if (filters.status && (!doc || doc.status !== filters.status)) return false;
-      var terms = tokens(filters.q || '');
-      if (terms.length && (!doc || scoreDoc(doc, terms) <= 0)) return false;
       return true;
+    }
+
+    function matchesSearch(node, terms) {
+      if (!terms.length) return true;
+      if (source && source.searchMatches) return source.searchMatches(node, terms);
+      var doc = docById[node.id];
+      return !!doc && scoreDoc(doc, terms) > 0;
     }
     function visibleEdge(edge) {
       // A dataset may filter its own edges. Documents pick one provenance at a time; tasks carry
@@ -2194,15 +2378,36 @@
         });
       }
 
+      var searchTerms = tokens(filters.q || '');
+      var searchFocus = {};
+      var searchNeighbours = {};
+      if (searchTerms.length) {
+        nodes.forEach(function (node) {
+          if (visible(node) && matchesSearch(node, searchTerms)) searchFocus[node.id] = 1;
+        });
+        edges.forEach(function (edge) {
+          if (!visibleEdge(edge)) return;
+          if (searchFocus[edge.s.id]) searchNeighbours[edge.t.id] = 1;
+          if (searchFocus[edge.t.id]) searchNeighbours[edge.s.id] = 1;
+        });
+      }
+
       edges.forEach(function (e) {
         if (!visibleEdge(e)) return;
         var a = toScreen(e.s), b = toScreen(e.t);
-        var live = selected && (e.s === selected || e.t === selected);
+        var selectedLive = selected && (e.s === selected || e.t === selected);
+        var searchLive = searchTerms.length && (searchFocus[e.s.id] || searchFocus[e.t.id]);
+        var live = searchTerms.length ? searchLive : selectedLive;
+        var focused = !!selected || searchTerms.length > 0;
+        var style = source && source.edgeStyle ? source.edgeStyle(e) : null;
+        var baseWidth = style && style.width ? style.width : 1;
         ctx.save();
         ctx.strokeStyle = live ? colours.accent : colours.edge;
-        ctx.globalAlpha = selected ? (live ? 1 : 0.22) : 0.72;
-        ctx.lineWidth = live ? 1.9 : 1;
-        ctx.setLineDash(e.bridge ? [8, 4] : (e.prov === 'inferred' ? [4, 4] : (e.prov === 'structure' ? [1, 3] : [])));
+        ctx.globalAlpha = focused ? (live ? 1 : 0.18) : 0.72;
+        ctx.lineWidth = live ? Math.max(1.9, baseWidth + 0.45) : baseWidth;
+        ctx.setLineDash(style ? style.dash :
+          (e.bridge ? [8, 4] : (e.prov === 'inferred' ? [4, 4] :
+            (e.prov === 'structure' ? [1, 3] : []))));
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -2216,7 +2421,11 @@
         if (!visible(n)) return;
         var p = toScreen(n);
         var r = radius(n) * Math.min(1.35, Math.max(0.75, view.k));
-        var dim = selected && n !== selected && !neighbours[n.id];
+        var selectedDim = !searchTerms.length && selected &&
+          n !== selected && !neighbours[n.id];
+        var searchDim = searchTerms.length &&
+          !searchFocus[n.id] && !searchNeighbours[n.id];
+        var dim = selectedDim || searchDim;
         ctx.save();
         ctx.globalAlpha = dim ? 0.28 : 1;
         ctx.beginPath();
@@ -2233,8 +2442,17 @@
           ctx.stroke();
         }
         ctx.restore();
-        var priority = n === selected ? 3 : (n === hover ? 3 : (neighbours[n.id] ? 2 : 0));
-        if (!priority && !selected && (n.degree >= 4 || view.k > 1.3)) priority = 1;
+        var priority = n === hover ? 3 : 0;
+        if (searchTerms.length) {
+          if (searchFocus[n.id]) priority = 3;
+          else if (searchNeighbours[n.id]) priority = 2;
+        } else if (n === selected) {
+          priority = 3;
+        } else if (neighbours[n.id]) {
+          priority = 2;
+        }
+        if (!priority && !selected && !searchTerms.length &&
+            (n.degree >= 4 || view.k > 1.3)) priority = 1;
         if (priority) labelQueue.push({ n: n, p: p, r: r, priority: priority, dim: dim });
       });
 
@@ -2386,13 +2604,33 @@
 
     function setFilters(next) {
       var bridgeTopologyChanged = !!filters.bridges !== !!next.bridges;
+      var topologyKeys = ['corpus', 'type', 'prov', 'bridges', 'life', 'links', 'group', 'status'];
+      var topologyChanged = topologyKeys.some(function (key) {
+        return String(filters[key] || '') !== String(next[key] || '');
+      });
       filters = next;
       if (selected && !visible(selected)) selected = null;
       if (bridgeTopologyChanged) {
         for (var i = 0; i < 70; i++) tick(0.72);
         fit();
+      } else if (topologyChanged && source && source.reheatOnFilter && !frozen) {
+        animate(60);
       }
       draw();
+    }
+
+    function setFrozen(next) {
+      next = !!next;
+      if (frozen === next) { draw(); return; }
+      frozen = next;
+      if (frozen) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = null;
+        nodes.forEach(function (node) { node.vx = 0; node.vy = 0; });
+        draw();
+      } else {
+        animate(60);
+      }
     }
 
     function graphStats() {
@@ -2402,16 +2640,29 @@
       };
     }
 
+    function graphLayoutState() {
+      return { restored: restoredLayout, initialTicks: initialTickCount,
+        layoutKey: (source && source.layoutKey) || '' };
+    }
+
     return {
       init: init, draw: draw, fit: function () { fit(); draw(); },
       zoom: function (f) { zoomAt((canvas.__w || 600) / 2, (canvas.__h || 400) / 2, f); },
       recolour: function () { if (ctx) { readColours(); draw(); } },
-      setSelection: setSelection, setFilters: setFilters, stats: graphStats,
+      setSelection: setSelection, setFilters: setFilters, setFrozen: setFrozen, stats: graphStats,
+      layoutState: graphLayoutState,
       teardown: function () {
+        if (source && source.layoutKey && nodes) {
+          layoutCache[source.layoutKey] = {};
+          nodes.forEach(function (node) {
+            layoutCache[source.layoutKey][node.id] = { x: node.x, y: node.y };
+          });
+        }
         if (raf) cancelAnimationFrame(raf);
         raf = null;
         window.removeEventListener('resize', onResize);
-        canvas = null; ctx = null; nodes = null; edges = null; selected = null;
+        canvas = null; ctx = null; nodes = null; edges = null; selected = null; source = null;
+        frozen = false; restoredLayout = false; initialTickCount = 0;
       }
     };
   })();
@@ -2533,35 +2784,24 @@
               '<label class="sr-only" for="graph-q">Search graph</label>' +
               '<input id="graph-q" type="search" placeholder="Search this corpus..." value="' + esc(state.query.q || '') + '">' +
             '</div>' +
-            '<div class="panel">' +
-              '<span class="rel-kind">Links</span>' +
-              ['', 'authored', 'structure', 'inferred'].map(function (p) {
-                return '<button class="icon-btn" type="button" data-prov="' + p + '" aria-pressed="' +
-                  (prov === p) + '">' + (p || 'all') + '</button>';
-              }).join('') +
-            '</div>' +
-            '<div class="panel">' +
-              '<label for="graph-type" class="rel-kind">Type</label>' +
-              '<select id="graph-type">' +
-                '<option value="">All types (' + corpusDocs.length + ')</option>' +
-                types.map(function (t) {
-                  return '<option value="' + esc(t) + '"' + (type === t ? ' selected' : '') + '>' +
-                    esc(TYPE_LABEL[t] || t) + ' (' + typeCount[t] + ')</option>';
-                }).join('') +
-              '</select>' +
-            '</div>' +
+
           '</div>' +
-          '<div class="graph-legend">' +
+          '<div class="graph-legend graph-filter-legend" aria-label="Document graph filters">' +
             '<h3>Document type</h3>' +
             '<div class="legend-types">' + types.map(function (t) {
-              return '<span style="--h: var(--h-' + esc(t) + ', 220)"><i></i>' +
-                esc(TYPE_LABEL[t] || t) + '</span>';
+              return '<button class="legend-toggle" type="button" data-doc-type="' + esc(t) +
+                '" aria-pressed="' + (!type || type === t) +
+                '" style="--h: var(--h-' + esc(t) + ', 220)"><i aria-hidden="true"></i><span>' +
+                esc(TYPE_LABEL[t] || t) + ' (' + typeCount[t] + ')</span></button>';
             }).join('') + '</div>' +
             '<h3>Link provenance</h3>' +
             '<div class="legend-edges">' +
-              '<span><i></i>authored - declared in frontmatter</span>' +
-              '<span><i class="str"></i>structure - folder containment</span>' +
-              '<span><i class="inf"></i>inferred - body names the file</span>' +
+              '<button class="legend-toggle" type="button" data-doc-prov="authored" aria-pressed="' +
+                (!prov || prov === 'authored') + '"><i aria-hidden="true"></i><span>authored - declared in frontmatter</span></button>' +
+              '<button class="legend-toggle" type="button" data-doc-prov="structure" aria-pressed="' +
+                (!prov || prov === 'structure') + '"><i class="str" aria-hidden="true"></i><span>structure - folder containment</span></button>' +
+              '<button class="legend-toggle" type="button" data-doc-prov="inferred" aria-pressed="' +
+                (!prov || prov === 'inferred') + '"><i class="inf" aria-hidden="true"></i><span>inferred - body names the file</span></button>' +
               (state.query.bridges === '1' ? '<span><i class="bridge"></i>bridge - labelled cross-corpus relation</span>' : '') +
             '</div>' +
           '</div>' +
@@ -2569,6 +2809,7 @@
         '<aside class="graph-reader" id="graph-reader" aria-label="Selected document"></aside>' +
       '</div></div>';
 
+    fitGraphLegend(main.querySelector('[aria-label="Document graph filters"]'));
     graph.init(document.getElementById('graph-wrap'), sel, {
       prov: prov, type: type, corpus: corpus, bridges: state.query.bridges === '1',
       q: state.query.q || '', group: state.query.group || '', status: state.query.status || ''
@@ -2584,11 +2825,18 @@
         if (action === 'out') graph.zoom(1 / 1.25);
       });
     });
-    main.querySelectorAll('[data-prov]').forEach(function (button) {
-      button.addEventListener('click', function () { setQuery({ prov: button.getAttribute('data-prov') }); });
+    main.querySelectorAll('[data-doc-prov]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setQuery({ prov: toggleExclusiveGraphFacet(state.query.prov || '',
+          button.getAttribute('data-doc-prov')) });
+      });
     });
-    var typeSelect = document.getElementById('graph-type');
-    if (typeSelect) typeSelect.addEventListener('change', function () { setQuery({ type: typeSelect.value }); });
+    main.querySelectorAll('[data-doc-type]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setQuery({ type: toggleExclusiveGraphFacet(state.query.type || '',
+          button.getAttribute('data-doc-type')) });
+      });
+    });
     var graphSearch = document.getElementById('graph-q');
     if (graphSearch) {
       var timer = null;
@@ -2619,9 +2867,13 @@
     }
     var hadGraph = !!document.getElementById('graph-wrap');
     var nextIsGraph = next.screen === 'docs' && next.query.view === 'graph';
+    var nextIsTaskGraph = next.screen === 'tasks' && next.query.view === 'graph';
     var previousCorpus = queryCorpus(state.query.corpus) || currentCorpus();
     var nextCorpus = queryCorpus(next.query.corpus) || previousCorpus;
-    var sameGraph = hadGraph && nextIsGraph && previousCorpus === nextCorpus;
+    var sameGraph = hadGraph && previousScreen === 'docs' && nextIsGraph &&
+      previousCorpus === nextCorpus;
+    var sameTaskGraph = hadGraph && previousScreen === 'tasks' &&
+      state.query.view === 'graph' && nextIsTaskGraph;
     state = next;
     adoptThemeFromUrl(state.query);
 
@@ -2640,6 +2892,19 @@
       syncNav();
       return;
     }
+    if (sameTaskGraph) {
+      graph.setFrozen(taskGraphFrozen(state.query.freeze));
+      graph.setFilters({
+        q: state.query.q || '', life: state.query.life || '',
+        links: state.query.links || ''
+      });
+      graph.setSelection(state.query.sel || '');
+      renderTaskGraphReader(state.query.sel || '');
+      syncTaskGraphControls();
+      syncNav();
+      return;
+    }
+    if (hadGraph) stopGraphLegendLayout();
     if (hadGraph) graph.teardown();
     if (previousScreen === 'project' && next.screen !== 'project' && window.CPProjectUI) {
       window.CPProjectUI.teardown();
@@ -2665,9 +2930,33 @@
   }
 
   function syncFilterButtons() {
-    main.querySelectorAll('[data-prov]').forEach(function (button) {
-      button.setAttribute('aria-pressed', String((state.query.prov || '') === button.getAttribute('data-prov')));
+    var prov = state.query.prov || '';
+    var type = state.query.type || '';
+    main.querySelectorAll('[data-doc-prov]').forEach(function (button) {
+      button.setAttribute('aria-pressed',
+        String(!prov || prov === button.getAttribute('data-doc-prov')));
     });
+    main.querySelectorAll('[data-doc-type]').forEach(function (button) {
+      button.setAttribute('aria-pressed',
+        String(!type || type === button.getAttribute('data-doc-type')));
+    });
+  }
+
+  function syncTaskGraphControls() {
+    var lifecycles = activeTaskLifecycles(state.query.life);
+    var links = activeTaskLinks(state.query.links);
+    main.querySelectorAll('[data-life]').forEach(function (button) {
+      button.setAttribute('aria-pressed',
+        String(lifecycles.indexOf(button.getAttribute('data-life')) >= 0));
+    });
+    main.querySelectorAll('[data-link]').forEach(function (button) {
+      button.setAttribute('aria-pressed',
+        String(links.indexOf(button.getAttribute('data-link')) >= 0));
+    });
+    var freeze = main.querySelector('[data-task-freeze]');
+    if (freeze) freeze.setAttribute('aria-pressed', String(taskGraphFrozen(state.query.freeze)));
+    var search = document.getElementById('graph-q');
+    if (search && document.activeElement !== search) search.value = state.query.q || '';
   }
 
   function syncDocumentControls() {
