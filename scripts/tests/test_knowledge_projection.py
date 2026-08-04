@@ -48,8 +48,8 @@ def project_export(package_count: int = 26) -> dict:
         packages.append({
             "package_id": package_id,
             "manifest_path": f"project/crates/{cargo_name}/Cargo.toml",
-            "cargo_display_name": cargo_name,
-            "rust_semantic_target_name": rust_name,
+            "display_name": cargo_name,
+            "symbol_namespace": rust_name,
             "purpose": {
                 "value": f"Purpose for {cargo_name}.",
                 "provenance": "cargo-package-description",
@@ -58,7 +58,7 @@ def project_export(package_count: int = 26) -> dict:
         })
         modules.append({
             "path": path,
-            "rust_crate_name": rust_name,
+            "unit_name": rust_name,
             "module_path": rust_name,
             "purpose": {
                 "value": f"Module purpose for {rust_name}.",
@@ -69,7 +69,7 @@ def project_export(package_count: int = 26) -> dict:
             "path": path,
             "size_bytes": 128 + index,
             "sha256": f"{index:064x}",
-            "rust_crate_name": rust_name,
+            "unit_name": rust_name,
             "module_path": rust_name,
         })
         nodes.append({
@@ -78,7 +78,7 @@ def project_export(package_count: int = 26) -> dict:
             "kind": "function",
             "identity_name": "root",
             "qualified_name": node_id,
-            "rust_crate_name": rust_name,
+            "unit_name": rust_name,
             "module_path": rust_name,
             "start_row": index,
             "start_column": 0,
@@ -86,7 +86,7 @@ def project_export(package_count: int = 26) -> dict:
             "end_column": 8,
         })
         hierarchy.append({
-            "rust_crate_name": rust_name,
+            "unit_name": rust_name,
             "module_path": rust_name,
             "path": path,
             "semantic_node_ids": [node_id],
@@ -119,7 +119,7 @@ def project_export(package_count: int = 26) -> dict:
             "packages_missing_cargo_description": [],
             "modules_missing_authored_purpose": [],
             "packages_without_related_product_documents": [
-                package["cargo_display_name"] for package in packages[1:]
+                package["display_name"] for package in packages[1:]
             ],
         },
     }
@@ -133,8 +133,8 @@ def project_export_with_agent_proofs() -> dict:
     payload["packages"].append({
         "package_id": package_id,
         "manifest_path": "crates/core/Cargo.toml",
-        "cargo_display_name": "core",
-        "rust_semantic_target_name": "core",
+        "display_name": "core",
+        "symbol_namespace": "core",
         "purpose": {
             "value": "Foundational math and spatial contracts.",
             "provenance": "cargo-package-description",
@@ -143,7 +143,7 @@ def project_export_with_agent_proofs() -> dict:
     })
     payload["modules"].append({
         "path": path,
-        "rust_crate_name": "core",
+        "unit_name": "core",
         "module_path": "math",
         "purpose": {
             "value": "Vector math.",
@@ -154,7 +154,7 @@ def project_export_with_agent_proofs() -> dict:
         "path": path,
         "size_bytes": 4096,
         "sha256": "f" * 64,
-        "rust_crate_name": "core",
+        "unit_name": "core",
         "module_path": "math",
     })
     proof_nodes = [
@@ -164,7 +164,7 @@ def project_export_with_agent_proofs() -> dict:
             "kind": "method",
             "identity_name": VECTOR_MUL_IDENTITY,
             "qualified_name": "Vector3::mul",
-            "rust_crate_name": "core",
+            "unit_name": "core",
             "module_path": "math",
             "start_row": 100,
             "start_column": 4,
@@ -177,7 +177,7 @@ def project_export_with_agent_proofs() -> dict:
             "kind": "method",
             "identity_name": SCALAR_MUL_IDENTITY,
             "qualified_name": "Vector3::mul",
-            "rust_crate_name": "core",
+            "unit_name": "core",
             "module_path": "math",
             "start_row": 120,
             "start_column": 4,
@@ -187,7 +187,7 @@ def project_export_with_agent_proofs() -> dict:
     ]
     payload["semantic_nodes"].extend(proof_nodes)
     payload["semantic_hierarchy"].append({
-        "rust_crate_name": "core",
+        "unit_name": "core",
         "module_path": "math",
         "path": path,
         "semantic_node_ids": [node["id"] for node in proof_nodes],
@@ -453,13 +453,13 @@ class KnowledgeProjectionTests(unittest.TestCase):
         self.assertEqual(26, len(project["files"]))
         self.assertEqual(
             {
-                "path", "size_bytes", "sha256", "rust_crate_name", "module_path",
+                "path", "size_bytes", "sha256", "unit_name", "module_path",
             },
             set(project["files"][0]),
         )
         self.assertEqual(0, project["semantic_nodes"][0]["start_row"])
         first = project["packages"][0]
-        self.assertNotEqual(first["cargo_display_name"], first["rust_semantic_target_name"])
+        self.assertNotEqual(first["display_name"], first["symbol_namespace"])
         self.assertIn("graph_counts", first)
         workspace = project["views"]["workspace"]["visible_nodes"]
         self.assertEqual("workspace-root", workspace[0]["presentation_group"]["derivation"])
@@ -1029,7 +1029,7 @@ class AcceptedReaderRendererTests(unittest.TestCase):
             "clusters": [{
                 "id": "display-route",
                 "label": "Display crate",
-                "rustCrateName": "rust_raw",
+                "unitName": "rust_raw",
                 "packageId": "raw-package-id",
                 "purpose": {"value": "Governed object-shaped crate purpose."},
                 "nodes": 1,
@@ -1050,7 +1050,7 @@ class AcceptedReaderRendererTests(unittest.TestCase):
                         "presentation_group": {"key": "from-view-workspace-crate"},
                         "source_context": {
                             "package_id": "raw-package-id",
-                            "rust_semantic_target_name": "rust_raw",
+                            "symbol_namespace": "rust_raw",
                         },
                     },
                 ]},
@@ -1069,27 +1069,27 @@ class AcceptedReaderRendererTests(unittest.TestCase):
                             "presentation_group": {"key": "from-view-crate-module"},
                             "source_context": {
                                 "package_id": "raw-package-id",
-                                "rust_crate_name": "rust_raw",
+                                "unit_name": "rust_raw",
                             },
                         },
                     ],
                 }],
                 "modules": [{
-                    "rust_crate_name": "rust_raw",
+                    "unit_name": "rust_raw",
                     "module_path": "mod",
                     "visible_nodes": [
                         {
                             "identity": "module:rust_raw:mod",
                             "label": "mod",
                             "presentation_group": {"key": "from-view-module-root"},
-                            "source_context": {"rust_crate_name": "rust_raw"},
+                            "source_context": {"unit_name": "rust_raw"},
                         },
                         {
                             "identity": "file:crates/display/src/lib.rs",
                             "label": "crates/display/src/lib.rs",
                             "presentation_group": {"key": "from-view-module-file"},
                             "source_context": {
-                                "rust_crate_name": "rust_raw",
+                                "unit_name": "rust_raw",
                                 "module_path": "mod",
                             },
                         },
@@ -1103,7 +1103,7 @@ class AcceptedReaderRendererTests(unittest.TestCase):
                             "label": "crates/display/src/lib.rs",
                             "presentation_group": {"key": "from-view-file-root"},
                             "source_context": {
-                                "rust_crate_name": "rust_raw",
+                                "unit_name": "rust_raw",
                                 "module_path": "mod",
                             },
                         },

@@ -997,7 +997,7 @@ def _project_payload(model: dict[str, Any], system: dict[str, Any]) -> dict[str,
     nodes: list[dict[str, Any]] = []
     for source in source_nodes:
         node_id = str(source.get("id") or "")
-        crate_name = str(source.get("rust_crate_name") or "")
+        crate_name = str(source.get("unit_name") or "")
         module_path = str(source.get("module_path") or "")
         identity_name = str(source.get("identity_name") or source.get("qualified_name") or "")
         qualified_name = str(source.get("qualified_name") or identity_name)
@@ -1077,7 +1077,7 @@ def _project_payload(model: dict[str, Any], system: dict[str, Any]) -> dict[str,
         files.append({
             "path": path,
             "name": PurePosixPath(path).name,
-            "crate": str(file_meta.get("rust_crate_name") or row.get("rust_crate_name") or "(workspace)"),
+            "crate": str(file_meta.get("unit_name") or row.get("unit_name") or "(workspace)"),
             "module": str(file_meta.get("module_path") or row.get("module_path") or ""),
             "size": file_size if isinstance(file_size, int) else 0,
             "sizeAvailable": isinstance(file_size, int),
@@ -1107,7 +1107,7 @@ def _project_payload(model: dict[str, Any], system: dict[str, Any]) -> dict[str,
     files.sort(key=lambda item: item["path"])
 
     package_by_crate = {
-        str(item.get("rust_semantic_target_name") or ""): item for item in packages
+        str(item.get("symbol_namespace") or ""): item for item in packages
     }
     crate_names = sorted(
         set(package_by_crate)
@@ -1121,9 +1121,9 @@ def _project_payload(model: dict[str, Any], system: dict[str, Any]) -> dict[str,
         crate_files = [file for file in files if file["crate"] == crate_name]
         clusters.append({
             "id": crate_name,
-            "label": str(package.get("cargo_display_name") or crate_name),
+            "label": str(package.get("display_name") or crate_name),
             "packageId": package.get("package_id"),
-            "rustCrateName": crate_name,
+            "unitName": crate_name,
             "files": len(crate_files),
             "nodes": len(crate_nodes),
             "pending": sum(file["pending"] for file in crate_files),

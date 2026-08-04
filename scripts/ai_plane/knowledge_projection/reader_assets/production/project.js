@@ -96,7 +96,7 @@
     var raw = String(value || '');
     return P.clusters.find(function (cluster) {
       return String(cluster.id) === raw ||
-        String(cluster.rustCrateName || '') === raw ||
+        String(cluster.unitName || '') === raw ||
         String(cluster.packageId || '') === raw;
     }) || null;
   }
@@ -106,7 +106,7 @@
     return {
       cluster: cluster,
       route: cluster ? String(cluster.id) : String(value || ''),
-      rust: cluster ? String(cluster.rustCrateName || cluster.id) : String(value || ''),
+      rust: cluster ? String(cluster.unitName || cluster.id) : String(value || ''),
       packageId: cluster && cluster.packageId != null ? String(cluster.packageId) : null
     };
   }
@@ -120,8 +120,8 @@
     return views.find(function (view) {
       return visibleNodes(view).some(function (record) {
         var source = record.source_context || {};
-        return source.rust_crate_name != null &&
-          String(source.rust_crate_name) === context.rust;
+        return source.unit_name != null &&
+          String(source.unit_name) === context.rust;
       });
     }) || null;
   }
@@ -130,7 +130,7 @@
     var views = P.views && Array.isArray(P.views.modules) ? P.views.modules : [];
     var rawModule = rawModulePath(moduleName);
     return views.find(function (view) {
-      return String(view.rust_crate_name || '') === context.rust &&
+      return String(view.unit_name || '') === context.rust &&
         String(view.module_path || '') === rawModule;
     }) || null;
   }
@@ -203,7 +203,7 @@
       if (Array.isArray(map)) {
         for (var index = 0; index < map.length; index++) {
           var record = map[index] || {};
-          var recordCrate = record.rust_crate_name || record.rustCrateName || record.crate;
+          var recordCrate = record.unit_name || record.unitName || record.crate;
           var recordModule = record.module_path || record.modulePath || record.module || '(root)';
           if (recordCrate !== crate || recordModule !== moduleName) continue;
           var authored = record.purpose || record.description || record.summary;
@@ -328,7 +328,7 @@
     P.clusters.forEach(function (cluster) {
       var id = 'crate:' + cluster.id;
       var packageId = cluster.packageId == null ? null : String(cluster.packageId);
-      var rustCrate = String(cluster.rustCrateName || cluster.id);
+      var rustCrate = String(cluster.unitName || cluster.id);
       var governedIdentity = packageId == null ? null : 'crate:' + packageId;
       var viewNode = findVisibleNode(
         view,
@@ -336,7 +336,7 @@
         cluster.label,
         [
           { package_id: packageId },
-          { rust_semantic_target_name: rustCrate }
+          { symbol_namespace: rustCrate }
         ]
       );
       itemMap[id] = true;
@@ -402,7 +402,7 @@
         view,
         governedIdentity,
         rawModule,
-        [{ package_id: context.packageId, rust_crate_name: context.rust }]
+        [{ package_id: context.packageId, unit_name: context.rust }]
       );
       itemMap[id] = true;
       nodes.push(graphNode(id, item.module, 'module',
@@ -437,7 +437,7 @@
     var rootId = 'module:' + context.route + '|' + moduleName;
     var rootIdentity = 'module:' + context.rust + ':' + rawModule;
     var rootViewNode = findVisibleNode(
-      view, rootIdentity, rawModule, [{ rust_crate_name: context.rust }]
+      view, rootIdentity, rawModule, [{ unit_name: context.rust }]
     );
     var nodes = [graphNode(rootId, moduleName, 'module',
       presentationGroupKey(rootViewNode, rootIdentity), {
@@ -449,7 +449,7 @@
       var id = 'file:' + file.path;
       var viewNode = findVisibleNode(
         view, id, file.path,
-        [{ rust_crate_name: context.rust, module_path: rawModule }]
+        [{ unit_name: context.rust, module_path: rawModule }]
       );
       itemMap[id] = true;
       nodes.push(graphNode(id, file.name, 'file',
@@ -510,7 +510,7 @@
     var rootId = 'file:' + file.path;
     var rootViewNode = findVisibleNode(
       view, rootId, file.path,
-      [{ rust_crate_name: file.crate, module_path: rawModulePath(file.module) }]
+      [{ unit_name: file.crate, module_path: rawModulePath(file.module) }]
     );
     var nodes = [graphNode(rootId, file.name, 'file',
       presentationGroupKey(rootViewNode, rootId), {
@@ -852,7 +852,7 @@
     var currentModule = query().module || (file && (file.module || '(root)')) || '';
     var up = '';
     if (currentScope === 'crate') {
-      up = '<button class="project-up" type="button" data-scope="workspace">← All crates</button>';
+      up = '<button class="project-up" type="button" data-scope="workspace">← All packages</button>';
     } else if (currentScope === 'module') {
       up = '<button class="project-up" type="button" data-scope="crate" data-crate="' +
         esc(currentCrate) + '">← Up to ' + esc(currentCrate) + '</button>';
@@ -1008,7 +1008,7 @@
     if (type === 'workspace') {
       title = 'Product workspace';
       subtitle = 'repository hierarchy · semantic index';
-      primary = '<p>The graph is the project tree: select a crate, then progressively expand ' +
+      primary = '<p>The graph is the project tree: select a package, then progressively expand ' +
         'module, file, and symbol levels without leaving this surface.</p>';
     } else if (type === 'crate') {
       var cluster = node.data.cluster || P.clusters.filter(function (item) {
@@ -1017,13 +1017,13 @@
       subtitle = 'crate cluster';
       var cratePurpose = authoredCratePurpose(cluster, node.data.crate);
       primary = purposeBlock('Purpose', cratePurpose,
-        'No crate purpose was exported from project/README.md or package metadata.') + '<dl class="project-facts"><dt>Files</dt><dd>' + (cluster ? cluster.files : '—') +
+        'No package purpose was exported from the source metadata.') + '<dl class="project-facts"><dt>Files</dt><dd>' + (cluster ? cluster.files : '—') +
         '</dd><dt>Symbols</dt><dd>' + (cluster ? cluster.nodes.toLocaleString() : '—') +
         '</dd><dt>Resolved edge touches</dt><dd>' +
         (cluster ? cluster.resolvedEdges.toLocaleString() : '—') + '</dd><dt>Pending</dt><dd>' +
         (cluster ? cluster.pending.toLocaleString() : '—') +
         '</dd><dt>Rust semantic identity</dt><dd><code>' +
-        esc(cluster ? (cluster.rustCrateName || cluster.id) : node.data.crate) + '</code></dd></dl>';
+        esc(cluster ? (cluster.unitName || cluster.id) : node.data.crate) + '</code></dd></dl>';
       actions = '<button class="btn primary" type="button" data-expand-crate="' +
         esc(node.data.crate) + '">Expand modules</button>';
     } else if (type === 'module') {
