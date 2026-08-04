@@ -1999,13 +1999,12 @@ def project_intelligence_declared() -> bool:
     corpus to describe. A repository that runs the control plane without one still gets a full
     control-plane reader, so the build degrades instead of failing on a source it never had.
     """
-    from scripts.ai_plane.knowledge_projection import index_adapters
-
-    root = constants.ROOT
-    if (root / "tools" / "ai-impact" / "Cargo.toml").is_file():
-        return True
-    return any(adapter.product_id != "(control plane)"
-               for adapter in index_adapters.candidates(root))
+    # A candidate adapter is NOT a declaration. A repository with a `package.json` and no source
+    # yet has an adapter that matches and produces nothing, and requiring the capability on that
+    # basis turned a perfectly reasonable `docs build` into a hard failure. Requiring it means the
+    # repository ships an exporter it has committed to; every other adapter degrades to an
+    # unconfigured reader, which is what "optional capability" was always supposed to mean.
+    return (constants.ROOT / "tools" / "ai-impact" / "Cargo.toml").is_file()
 
 
 def cmd_docs(args: Any) -> None:

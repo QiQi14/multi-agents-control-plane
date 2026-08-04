@@ -241,6 +241,19 @@ def unavailable_boundary_fields(root: Path) -> dict[str, Any]:
                 "once it is."
             ),
         }
+    # "No adapter supports that stack" and "the adapter found nothing to index" are different
+    # situations with different remedies, and telling someone to write an adapter that already
+    # exists sends them a long way in the wrong direction.
+    supported = [adapter.stack for adapter in candidates(root)]
+    if supported:
+        return {
+            "indexed_roots": [product.relative_path for product in products],
+            "rebuild_guidance": (
+                f"Discovered {described}. The {', '.join(sorted(set(supported)))} index found no "
+                f"source to index there yet, so no graph is claimed. Rerun `{REBUILD_COMMAND}` "
+                "once there is."
+            ),
+        }
     return {
         "indexed_roots": [product.relative_path for product in products],
         "rebuild_guidance": (

@@ -236,7 +236,8 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
     if args.dry_run:
         print(f"Would install {len(paths)} file(s) into {target}")
         print(f"Workspace mode: {describe_mode(topology['git_mode'])}")
-        planned = workspace_ignore_plan(target, topology["git_mode"])
+        planned = workspace_ignore_plan(
+            target, topology["git_mode"], has_product=bool(topology["products"]))
         if planned:
             print("Would add to the WORKSPACE .gitignore (never a product's): "
                   + ", ".join(planned))
@@ -273,9 +274,13 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
             path.write_text(body, encoding="utf-8")
         entries[f".ai/memory/{name}"] = sha256(path)
 
-    missing_ignores = workspace_ignore_plan(target, topology["git_mode"])
+    missing_ignores = workspace_ignore_plan(
+        target, topology["git_mode"], has_product=bool(topology["products"]))
     if missing_ignores and not args.no_gitignore:
         write_workspace_ignores(target, missing_ignores)
+        # Recorded like anything else this script writes, so uninstall can take it back and so a
+        # re-install does not see its own edit as drift.
+        entries[".gitignore"] = sha256(target / ".gitignore")
     stack_note = tailor_extensions(target, topology["stacks"])
     if stack_note and (target / ".ai" / "config.yaml").is_file():
         # Record the hash AFTER tailoring. Recording the shipped bytes made the very next run see
@@ -307,9 +312,17 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
     return 0
 
 
-def workspace_ignore_plan(target: Path, mode: str) -> list[str]:
-    """Ignore lines this WORKSPACE root is missing. A product's ignore policy is never touched."""
-    wanted = products.workspace_ignore_entries(mode)
+IGNORE_BLOCK_HEADER = "# --- control plane workspace ---"
+
+
+def workspace_ignore_plan(target: Path, mode: str, *, has_product: bool) -> list[str]:
+    """Ignore lines this WORKSPACE root is missing. A product's ignore policy is never touched.
+
+    Nothing is planned until a product actually exists. `/projects/` protects a checkout that
+    carries its own `.git`; with no product there is nothing to protect, and writing into
+    someone's repository on a guess about what they will do later is not this script's business.
+    """
+    wanted = products.workspace_ignore_entries(mode) if has_product else ()
     if not wanted:
         return []
     path = target / ".gitignore"
@@ -330,7 +343,7 @@ def write_workspace_ignores(target: Path, missing: list[str]) -> None:
     existing = path.read_text(encoding="utf-8") if path.is_file() else ""
     if existing and not existing.endswith("\n"):
         existing += "\n"
-    block = ("\n# --- control plane workspace ---\n"
+    block = (f"\n{IGNORE_BLOCK_HEADER}\n"
              "# A product under projects/ carries its own .git; tracking it here records a broken\n"
              "# gitlink or swallows the whole checkout.\n")
     path.write_text(existing + block + "\n".join(missing) + "\n", encoding="utf-8")
@@ -445,6 +458,33 @@ def remove_generated(target: Path) -> tuple[list[str], list[str]]:
     return removed, kept
 
 
+def strip_workspace_ignores(target: Path, digest: str) -> bool:
+    """Remove the block this installer appended, leaving whatever was there before it.
+
+    Only while the file still matches what install left: an edit since then is somebody's decision,
+    and this script never deletes what it did not place.
+    """
+    path = target / ".gitignore"
+    if not path.is_file() or sha256(path) != digest:
+        return False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        start = lines.index(IGNORE_BLOCK_HEADER)
+    except ValueError:
+        return False
+    end = start + 1
+    while end < len(lines) and (lines[end].startswith("#") or lines[end].startswith("/")):
+        end += 1
+    kept = lines[:start] + lines[end:]
+    while kept and not kept[-1].strip():
+        kept.pop()
+    if not kept:
+        path.unlink()
+        return True
+    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    return True
+
+
 def do_uninstall(target: Path, args: argparse.Namespace) -> int:
     manifest = read_manifest(target)
     entries: dict[str, str] = manifest.get("files", {})
@@ -453,6 +493,10 @@ def do_uninstall(target: Path, args: argparse.Namespace) -> int:
         print("Nothing was removed. This installer only deletes files it recorded placing.",
               file=sys.stderr)
         return 1
+
+    # The workspace .gitignore is an APPEND, not a whole file we own, so it is stripped rather
+    # than deleted -- and only its own block.
+    ignore_digest = entries.pop(".gitignore", None)
 
     removable, modified, missing = [], [], []
     for rel, digest in sorted(entries.items()):
@@ -478,6 +522,9 @@ def do_uninstall(target: Path, args: argparse.Namespace) -> int:
 
     for rel in removable:
         (target / rel).unlink()
+
+    if ignore_digest and strip_workspace_ignores(target, ignore_digest):
+        print("Removed the control-plane block from the workspace .gitignore.")
 
     # Byte-code caches are produced by Python from the files just deleted. They are not "ours" in
     # the manifest sense, but leaving them keeps otherwise-empty directories alive.

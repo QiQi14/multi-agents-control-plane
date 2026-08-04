@@ -371,6 +371,45 @@ class WorkspaceIgnoreTests(InstallerFixture):
         self.assertEqual(0, code)
         self.assertIn("Workspace .gitignore is missing", output)
         self.assertFalse((self.target / ".gitignore").exists())
+    def test_install_then_uninstall_returns_the_tree(self) -> None:
+        """The round trip CI checks, and the suite did not. A file install newly created passed
+        every local test and failed on the first CI run because nothing asserted it came back."""
+        self.nested()
+        product_files = {"projects/their-app/package.json", "projects/their-app/.gitignore"}
+        run(install.do_install, self.target, args())
+        self.assertTrue((self.target / ".gitignore").is_file())
+        run(install.do_uninstall, self.target, args(uninstall=True, include_generated=True))
+        self.assertEqual(self.their_files() | product_files, self.files())
+        self.assertFalse((self.target / ".gitignore").exists(),
+                         "the block was the whole file, so the file goes too")
+
+    def test_uninstall_keeps_ignore_lines_it_did_not_write(self) -> None:
+        self.nested()
+        (self.target / ".gitignore").write_text("# mine\n*.log\n", encoding="utf-8")
+        run(install.do_install, self.target, args())
+        run(install.do_uninstall, self.target, args(uninstall=True, include_generated=True))
+        remaining = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertEqual("# mine\n*.log\n", remaining)
+
+    def test_uninstall_keeps_a_gitignore_edited_since_install(self) -> None:
+        """Never delete what somebody has since decided. An edited file is theirs now."""
+        self.nested()
+        run(install.do_install, self.target, args())
+        path = self.target / ".gitignore"
+        path.write_text(path.read_text(encoding="utf-8") + "/mine/\n", encoding="utf-8")
+        run(install.do_uninstall, self.target, args(uninstall=True, include_generated=True))
+        self.assertIn("/mine/", path.read_text(encoding="utf-8"))
+        self.assertIn("/projects/", path.read_text(encoding="utf-8"))
+
+    def test_a_workspace_with_no_product_is_not_written_to(self) -> None:
+        """`/projects/` protects a checkout that carries its own .git. With no product there is
+        nothing to protect, and guessing at what someone will do later is not the installer's
+        business -- it is also what broke the CI round trip."""
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertFalse((self.target / ".gitignore").exists())
+        self.assertNotIn("Added", output.split("Workspace mode")[-1].split("Next:")[0])
+
 
 class WriteBoundaryTests(unittest.TestCase):
     def test_the_payload_never_escapes_the_target(self) -> None:
