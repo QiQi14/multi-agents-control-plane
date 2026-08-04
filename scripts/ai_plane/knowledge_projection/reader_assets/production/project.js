@@ -360,13 +360,57 @@
     return { nodes: nodes, edges: edges, title: 'Product workspace', omitted: 0 };
   }
 
+  // Module paths are PATHS, not opaque labels. Listing every distinct one at a crate's level
+  // dumped the whole subtree at once -- a real product rendered ~500 fully-qualified siblings with
+  // nothing to drill into. This shows one level at a time and collapses a chain that has only one
+  // child, so a package whose sole entry is `src/` presents its contents directly instead of
+  // making the reader click through a level that carries no choice.
+  var MODULE_SEPARATORS = /::|[./]/;
+
+  function moduleSegments(moduleName, crate) {
+    var raw = rawModulePath(moduleName);
+    if (!raw) return [];
+    var parts = raw.split(MODULE_SEPARATORS).filter(function (p) { return p.length; });
+    // The crate name usually prefixes its own module paths; it is not a level to descend through.
+    var crateParts = String(crate || '').split(MODULE_SEPARATORS).filter(function (p) { return p.length; });
+    var i = 0;
+    while (i < crateParts.length && i < parts.length && parts[i] === crateParts[i]) i++;
+    return parts.slice(i);
+  }
+
+  function collapsePassthrough(pathsList) {
+    // Drop leading segments every path agrees on: they offer no navigational choice.
+    var depth = 0;
+    for (;;) {
+      var candidate = null;
+      for (var i = 0; i < pathsList.length; i++) {
+        var segs = pathsList[i];
+        if (segs.length <= depth + 1) return depth;   // something terminates here; stop collapsing
+        if (candidate === null) candidate = segs[depth];
+        else if (segs[depth] !== candidate) return depth;
+      }
+      if (candidate === null) return depth;
+      depth++;
+    }
+  }
+
   function crateModel(crate) {
     var context = crateRouteContext(crate);
     var view = crateView(context);
     var modules = {};
-    P.nodes.forEach(function (node) {
-      if (node.crate !== context.rust) return;
-      var moduleName = node.module || '(root)';
+    var owned = P.nodes.filter(function (node) { return node.crate === context.rust; });
+    var segmentsFor = {};
+    owned.forEach(function (node) {
+      segmentsFor[node.module || '(root)'] = moduleSegments(node.module || '(root)', context.rust);
+    });
+    var collapsed = collapsePassthrough(Object.keys(segmentsFor).map(function (k) {
+      return segmentsFor[k];
+    }));
+    owned.forEach(function (node) {
+      var full = node.module || '(root)';
+      var segs = segmentsFor[full];
+      // One level below the collapsed depth; anything terminating at that depth is this level's own.
+      var moduleName = segs.length > collapsed ? segs[collapsed] : '(root)';
       var id = 'module:' + context.route + '|' + moduleName;
       var bucket = modules[id] || (modules[id] = {
         id: id, module: moduleName, nodes: 0, files: {}, pending: 0
@@ -478,7 +522,7 @@
     var view = fileView(file.path);
     var symbols = (nodesByPath[file.path] || []).slice();
     var selectedId = query().sel && nodeById[query().sel] ? query().sel : '';
-    if (!selectedId && file.path === 'crates/core/src/math.rs') {
+    if (!selectedId && file.path === 'crates/aios-core/src/math.rs') {
       selectedId = P.proofSelection.candidates[0] || '';
     }
     var included = {};
@@ -556,7 +600,7 @@
       var crate = query().crate || P.clusters[0].id;
       model = moduleModel(crate, query().module || '(root)');
     } else if (currentScope === 'file') {
-      model = fileModel(query().file || 'crates/core/src/math.rs');
+      model = fileModel(query().file || 'crates/aios-core/src/math.rs');
     } else {
       model = workspaceModel();
     }

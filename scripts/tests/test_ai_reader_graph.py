@@ -393,3 +393,42 @@ class LayoutSettlingTests(unittest.TestCase):
         source = app()
         body = source[source.index("function animate(minFrames)"):source.index("function radius(")]
         self.assertIn("if (frozen) { raf = null; draw(); return; }", body)
+
+
+class ProgressiveDrilldownTests(unittest.TestCase):
+    """A package must reveal ONE level at a time.
+
+    Listing every distinct module path at a package's level dumped the whole subtree: a real
+    TypeScript product rendered ~500 fully-qualified siblings, and this repository's own editor
+    crate rendered 222. Both were unnavigable while every count looked correct.
+    """
+
+    def project_js(self) -> str:
+        return (READER / "project.js").read_text(encoding="utf-8")
+
+    def test_the_crate_level_buckets_by_one_segment_not_the_whole_path(self) -> None:
+        source = self.project_js()
+        self.assertIn("moduleSegments", source)
+        self.assertIn("segs.length > collapsed ? segs[collapsed] : '(root)'", source,
+                      "the bucket key must be a single segment at the current depth")
+        self.assertNotIn("var moduleName = node.module || '(root)';\n      var id = 'module:'",
+                         source, "bucketing on the full module path is the flat dump")
+
+    def test_a_single_child_chain_is_collapsed(self) -> None:
+        """A package whose only entry is `src/` must show `src`'s contents, not `src` itself:
+        a level with one choice is not a choice."""
+        source = self.project_js()
+        # Assert the CALL, not the name: a substring check also matches a renamed definition and
+        # would stay green while the call site threw.
+        self.assertIn("var collapsed = collapsePassthrough(", source)
+        self.assertIn("function collapsePassthrough(pathsList) {", source)
+
+    def test_collapsing_stops_where_a_real_choice_appears(self) -> None:
+        """`src` plus `test` must both stay visible; collapsing past a fork would hide a sibling."""
+        source = self.project_js()
+        self.assertIn("if (segs[depth] !== candidate) return depth;", source)
+        self.assertIn("if (segs.length <= depth + 1) return depth;", source)
+
+    def test_separators_from_every_indexed_language_are_handled(self) -> None:
+        """Rust writes `a::b`, Python and TypeScript write `a.b`, paths write `a/b`."""
+        self.assertIn("/::|[./]/", self.project_js())
