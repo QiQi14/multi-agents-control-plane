@@ -95,59 +95,6 @@ class AiDocsTests(unittest.TestCase):
         res = ai_docs.cmd_docs_lint(self.ai)
         self.assertEqual(1, res)
 
-    def test_ai_docs_lint_fails_for_new_untyped_product_document(self) -> None:
-        product_dir = self.root / "project" / "docs"
-        product_dir.mkdir(parents=True)
-        (product_dir / "new.md").write_text("# New Untyped Product Doc\n", encoding="utf-8")
-        self.assertEqual(1, ai_docs.cmd_docs_lint(self.ai))
-
-    def test_ai_docs_cli_propagates_product_lint_failure_nonzero(self) -> None:
-        product_dir = self.root / "project" / "docs"
-        product_dir.mkdir(parents=True)
-        (product_dir / "new.md").write_text("# New Untyped Product Doc\n", encoding="utf-8")
-        with self.assertRaises(SystemExit) as raised:
-            ai_docs.cmd_docs(argparse.Namespace(docs_command="lint"))
-        self.assertEqual(1, raised.exception.code)
-
-    def test_ai_docs_lint_accepts_valid_product_document(self) -> None:
-        product_dir = self.root / "project" / "docs"
-        product_dir.mkdir(parents=True)
-        (product_dir / "architecture.md").write_text(
-            "---\n"
-            "id: product-architecture\n"
-            "corpus: product\n"
-            "type: architecture\n"
-            "domain: rendering\n"
-            "audiences: [engineering]\n"
-            "authority: canonical\n"
-            "status: active\n"
-            "maturity: implemented\n"
-            "visibility: internal\n"
-            "summary: Current rendering architecture.\n"
-            "navigation: []\n"
-            "relations: []\n"
-            "subjects: []\n"
-            "---\n"
-            "# Rendering Architecture\n",
-            encoding="utf-8",
-        )
-        self.assertEqual(0, ai_docs.cmd_docs_lint(self.ai))
-        site_dir = ai_docs.cmd_docs_build(self.ai)
-        self.assertTrue((site_dir / "docs" / "product-architecture.html").exists())
-
-    def test_ai_docs_lint_fails_unresolved_authored_product_relation(self) -> None:
-        product_dir = self.root / "project" / "docs"
-        product_dir.mkdir(parents=True)
-        content = (
-            "---\nid: product-relation\ncorpus: product\ntype: reference\ndomain: rendering\n"
-            "audiences: [engineering]\nauthority: informative\nstatus: active\nmaturity: partial\n"
-            "visibility: internal\nsummary: Relation fixture.\nnavigation: []\n"
-            "relations:\n  - type: references\n    target: missing-product-doc\nsubjects: []\n"
-            "---\n# Product Relation\n"
-        )
-        (product_dir / "relation.md").write_text(content, encoding="utf-8")
-        self.assertEqual(1, ai_docs.cmd_docs_lint(self.ai))
-
     def test_ai_docs_stats(self) -> None:
         _write_doc(
             self.ai, "rules", "rule-a.md",

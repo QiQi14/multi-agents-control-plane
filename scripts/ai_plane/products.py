@@ -214,6 +214,60 @@ def product_document_roots(root: Path) -> list[str]:
     return roots
 
 
+# How a workspace relates to version control. Both modes are legitimate and opposite, so the plane
+# reports which one it is in rather than assuming, and the guidance differs accordingly.
+SHARED_PLANE = "shared-plane"        # the workspace is a repo; the plane is committed and shared
+LOCAL_WRAPPER = "local-wrapper"      # the workspace is not a repo; the plane is a disposable shell
+IGNORED_PLANE = "ignored-plane"      # the workspace is a repo that deliberately ignores the plane
+
+# What a SHARED workspace repository must not track. `projects/` is the important one: a product
+# checkout carries its own `.git`, so an unignored `git add .` at the workspace root either records
+# a broken gitlink or swallows the entire product.
+WORKSPACE_IGNORES = (
+    "/projects/",
+    "/.ai/_site/",
+    "/.ai/.local/",
+    "/.ai/_registry.json",
+)
+# What an IGNORED plane adds on top: the plane's own installed surface.
+WRAPPER_IGNORES = ("/.ai/", "/scripts/", "/ai", "/ai.cmd", "/AGENTS.md", "/CLAUDE.md",
+                   "/GEMINI.md", "/.claude/", "/.agents/")
+
+
+def git_dir(root: Path) -> Path | None:
+    """The workspace's own git directory, if the workspace itself is a checkout."""
+    candidate = root / ".git"
+    return candidate if candidate.exists() else None
+
+
+def workspace_git_mode(root: Path) -> str:
+    """Which of the two adoption shapes this workspace is in.
+
+    A team that shares the plane commits it and ignores `projects/`. A single developer wrapping a
+    product they do not own ignores the plane instead, so git only ever sees what is inside
+    `projects/`. Guessing wrong means telling someone to commit files they deliberately excluded.
+    """
+    if git_dir(root) is None:
+        return LOCAL_WRAPPER
+    ignore = root / ".gitignore"
+    if not ignore.is_file():
+        return SHARED_PLANE
+    try:
+        lines = {line.strip() for line in ignore.read_text(encoding="utf-8").splitlines()}
+    except (OSError, UnicodeDecodeError):
+        return SHARED_PLANE
+    return IGNORED_PLANE if any(entry in lines for entry in ("/.ai/", ".ai/")) else SHARED_PLANE
+
+
+def workspace_ignore_entries(mode: str) -> tuple[str, ...]:
+    """The workspace-root ignore lines that mode needs. Never a product's ignore policy."""
+    if mode == LOCAL_WRAPPER:
+        return ()
+    if mode == IGNORED_PLANE:
+        return WORKSPACE_IGNORES + WRAPPER_IGNORES
+    return WORKSPACE_IGNORES
+
+
 def mixed_install_conflicts(root: Path) -> list[str]:
     """Reasons this checkout would become a control plane and a product at the same level.
 

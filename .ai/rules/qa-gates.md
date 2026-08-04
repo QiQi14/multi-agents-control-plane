@@ -26,6 +26,11 @@ Validate:
   confirm the task prompt, adapter copy, and reconstructed manifest delta are exact and contain no
   extra entry or changed field. A missing or invalid current manifest must fail closed.
 - Were required commands or tests run?
+- **Does what the task PRODUCED match what it DECLARED?** Count the files in the task's `evidence/`
+  directory against the artifacts `evidence.yaml` declares. Undeclared files are the single most
+  common way a task ships with no usable evidence: they pass every gate, appear in a directory
+  listing as diligence, and are visible to nobody. A gap is a finding, not a formatting nit — and
+  the remedy is to declare them or delete them, never to change the reader.
 - Does the versioned verification evidence record match the contract (identity, argv, scope,
   escalation reasons)? That record is the canonical evidence-gate result; raw gate logs (e.g. Cargo
   output) are diagnostic only. When no evidence gate is registered, `ai verify` degrades to the

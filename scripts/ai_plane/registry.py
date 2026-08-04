@@ -181,6 +181,16 @@ def _assemble_doc_entry(rel_path: str, doc_id: str, doc_type: str, meta: dict[st
 
 
 
+def product_baseline_declared(target_ai: Path) -> bool:
+    """True when this repository has taken authority over its product documentation.
+
+    Absent, the product corpus has not been adopted yet -- which is the state every fresh install
+    is in. Treating that as drift turned `ai docs lint` into fourteen errors about a baseline the
+    adopter has never heard of, on files the plane had simply never looked at before.
+    """
+    return (target_ai / "project" / "product-doc-legacy-baseline.json").exists()
+
+
 def _load_product_legacy_baseline(target_ai: Path) -> tuple[dict[str, str], list[str]]:
     baseline_path = target_ai / "project" / "product-doc-legacy-baseline.json"
     if not baseline_path.exists():
@@ -434,6 +444,7 @@ def generate_registry(ai_root: Path | None = None, *,
 
     baseline, baseline_errors = _load_product_legacy_baseline(target_ai)
     errors.extend(baseline_errors)
+    unadopted: list[str] = []
     # Discovered, never assumed. A hard-coded singular `project/docs` is what left one product's
     # documentation in two places at once, with the reader still reading the stale mirror.
     for relative_root in product_document_roots(target_ai.parent):
@@ -483,11 +494,25 @@ def generate_registry(ai_root: Path | None = None, *,
                 warnings.append(f"Legacy product document {rel_path} is indexed as legacy-untyped")
                 continue
 
+            if not product_baseline_declared(target_ai):
+                # Not adopted yet, so this is an INVENTORY item, not drift. The file stays out of
+                # the registry -- authority is never assigned silently -- but it is named, with the
+                # command that takes authority over it.
+                unadopted.append(rel_path)
+                continue
             reason = (
                 "content hash changed from the legacy baseline"
                 if rel_path in baseline else "path is not in the legacy baseline"
             )
             errors.append(f"Product document {rel_path} missing required metadata: {reason}")
+
+    if unadopted:
+        warnings.append(
+            f"{len(unadopted)} product document(s) are not registered and carry no authority: "
+            + ", ".join(sorted(unadopted)[:5])
+            + (f" (+{len(unadopted) - 5} more)" if len(unadopted) > 5 else "")
+            + ". Inventory them with: python scripts/ai_cli.py docs adopt"
+        )
 
     registered_ids = set(documents_map)
     known_external = _known_task_and_decision_ids(target_ai)

@@ -78,5 +78,49 @@ separate, live check the harness cannot stand in for; do not record a headless p
 For schema-versioned tasks, record visual evidence in `evidence.yaml`. Keep `generated-result`,
 `expected-reference`, `golden`, and `comparison-diff` distinct, with storage convention,
 availability, artifact identity, producer command/environment, claim or acceptance linkage,
-inspection/coverage, and accessibility text. A regenerable preview needs no committed PNG when the
-exact command and availability are present; do not render it as a missing committed artifact.
+inspection/coverage, and accessibility text.
+
+### A file on disk is not evidence
+
+`evidence.yaml` is the evidence. The `evidence/` directory is a byproduct of producing it. A file
+sitting there that no item declares proves nothing, is visible to nobody, and costs the repository
+its bytes — while looking, in a directory listing, exactly like diligence.
+
+This is the most common way a task ships with no evidence at all. Three real tasks captured 31, 23,
+and 24 images between them and declared 1, 1, and 0. Every gate passed. The reader showed "No
+verified media is available" on all three, and the reviewer who asked why went looking for a bug in
+the reader — twice — because the rule pointed nowhere else.
+
+**Decide before you write the file:**
+
+- **A human must look at it to accept the task.** Then it has to be *visible*, which means declared
+  and committed. A `regenerable` item is invisible to everyone who has not run the command
+  themselves, so it cannot carry an acceptance line that depends on looking.
+- **Nobody needs to look.** Then do not write the file. Record the command as `regenerable` and
+  stop. Writing an image you do not declare is strictly worse than not producing it.
+
+Never the third thing: producing files and declaring none of them.
+
+### What makes an artifact reach a human
+
+The reader shows an item under *Representative media* only when all four hold. Fewer than four and
+it renders nothing — not an error, just an empty panel, which is why this fails silently:
+
+1. `availability: available`
+2. `storage: committed` — the bytes are in git
+3. `artifact.media_type` is `image/*`, `audio/*`, or `video/*`, with `artifact.path` and
+   `artifact.sha256`
+4. The recorded path resolves to a real file inside the repository (lifecycle moves are handled;
+   a wrong or deleted path is not)
+
+Give every one an `accessibility_text`: it is the alt text, and the only description a reviewer on a
+text-only surface will ever get.
+
+### The sentence this replaces
+
+This rule used to say a regenerable preview "needs no committed PNG when the exact command and
+availability are present". That is true of *validation* and false of *review*: it answers whether an
+item is well-formed, not whether anyone can see it. Read as guidance about what to produce — which
+is how an executor reads a rule — it says record commands and skip the artifact, and then the
+acceptance line that says "look at this" has nothing to look at. Both halves are needed: the command
+makes the image reproducible, the declared committed artifact makes it visible.

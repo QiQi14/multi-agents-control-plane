@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
@@ -28,6 +29,7 @@ def args(**overrides) -> argparse.Namespace:
     base = {
         "update": False, "uninstall": False, "dry_run": False,
         "force": False, "with_tests": False, "include_generated": False, "here": False,
+        "no_gitignore": False,
     }
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -306,6 +308,69 @@ class TopologyGuardTests(InstallerFixture):
         self.assertEqual(0, code)
         self.assertIn("nothing has drifted", output)
 
+
+class WorkspaceIgnoreTests(InstallerFixture):
+    """Ignore entries belong to the WORKSPACE root. Writing them into a product's .gitignore is the
+    collision-avoidance-in-someone-else's-repository mistake the topology exists to prevent."""
+
+    def nested(self) -> Path:
+        product = self.target / "projects" / "their-app"
+        product.mkdir(parents=True)
+        (product / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        (product / ".gitignore").write_text("dist/\n", encoding="utf-8")
+        return product
+
+    def test_a_shared_workspace_gets_projects_ignored(self) -> None:
+        product = self.nested()
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertIn("shared plane", output)
+        ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/projects/", ignore)
+        # The product's own policy is untouched.
+        self.assertEqual("dist/\n", (product / ".gitignore").read_text(encoding="utf-8"))
+
+    def test_an_existing_workspace_gitignore_is_appended_to_not_rewritten(self) -> None:
+        self.nested()
+        (self.target / ".gitignore").write_text("# mine\n*.log\n", encoding="utf-8")
+        run(install.do_install, self.target, args())
+        ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("# mine", ignore)
+        self.assertIn("*.log", ignore)
+        self.assertIn("/projects/", ignore)
+
+    def test_an_already_ignored_entry_is_not_duplicated(self) -> None:
+        self.nested()
+        (self.target / ".gitignore").write_text("/projects/\n", encoding="utf-8")
+        run(install.do_install, self.target, args())
+        ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertEqual(1, ignore.count("/projects/"))
+
+    def test_a_workspace_that_excludes_the_plane_keeps_excluding_it(self) -> None:
+        """The wrapper mode: git only ever sees what is inside projects/."""
+        self.nested()
+        (self.target / ".gitignore").write_text("/.ai/\n", encoding="utf-8")
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertIn("ignored plane", output)
+        ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        for surface in ("/scripts/", "/AGENTS.md", "/projects/"):
+            self.assertIn(surface, ignore)
+
+    def test_a_workspace_that_is_not_a_checkout_gets_no_ignore_file(self) -> None:
+        shutil.rmtree(self.target / ".git")
+        self.nested()
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertIn("local wrapper", output)
+        self.assertFalse((self.target / ".gitignore").exists())
+
+    def test_the_ignore_write_can_be_declined(self) -> None:
+        self.nested()
+        code, output = run(install.do_install, self.target, args(no_gitignore=True))
+        self.assertEqual(0, code)
+        self.assertIn("Workspace .gitignore is missing", output)
+        self.assertFalse((self.target / ".gitignore").exists())
 
 class WriteBoundaryTests(unittest.TestCase):
     def test_the_payload_never_escapes_the_target(self) -> None:

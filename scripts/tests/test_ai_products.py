@@ -112,6 +112,44 @@ class DocumentRootTests(Fixture):
         self.assertEqual([], products.product_document_roots(root))
 
 
+class WorkspaceModeTests(Fixture):
+    """A team sharing the plane and a developer wrapping a product they do not own want opposite
+    things from git. Guessing means telling someone to commit files they deliberately excluded."""
+
+    def test_a_workspace_that_is_not_a_checkout_is_a_local_wrapper(self) -> None:
+        root = self.workspace({"projects/app/package.json": '{"name":"app"}'})
+        self.assertEqual(products.LOCAL_WRAPPER, products.workspace_git_mode(root))
+        self.assertEqual((), products.workspace_ignore_entries(products.LOCAL_WRAPPER))
+
+    def test_a_versioned_workspace_shares_the_plane(self) -> None:
+        root = self.workspace({"projects/app/package.json": '{"name":"app"}'})
+        (root / ".git").mkdir()
+        self.assertEqual(products.SHARED_PLANE, products.workspace_git_mode(root))
+
+    def test_a_versioned_workspace_that_excludes_the_plane_is_a_wrapper(self) -> None:
+        root = self.workspace({"projects/app/package.json": '{"name":"app"}',
+                               ".gitignore": "/.ai/\n/scripts/\n"})
+        (root / ".git").mkdir()
+        self.assertEqual(products.IGNORED_PLANE, products.workspace_git_mode(root))
+
+    def test_a_shared_workspace_must_not_track_the_products(self) -> None:
+        """A product carries its own .git; tracking it here records a broken gitlink or swallows
+        the whole checkout."""
+        entries = products.workspace_ignore_entries(products.SHARED_PLANE)
+        self.assertIn("/projects/", entries)
+        self.assertNotIn("/.ai/", entries)
+
+    def test_an_ignored_plane_excludes_its_own_surface_too(self) -> None:
+        entries = products.workspace_ignore_entries(products.IGNORED_PLANE)
+        self.assertIn("/projects/", entries)
+        for surface in ("/.ai/", "/scripts/", "/AGENTS.md"):
+            self.assertIn(surface, entries)
+
+    def test_an_unreadable_gitignore_does_not_decide_the_mode_by_accident(self) -> None:
+        root = self.workspace({"projects/app/package.json": '{"name":"app"}', ".gitignore": ""})
+        (root / ".git").mkdir()
+        self.assertEqual(products.SHARED_PLANE, products.workspace_git_mode(root))
+
 class AdapterSelectionTests(Fixture):
     def test_a_nested_product_outranks_the_control_plane(self) -> None:
         """This ordering IS the fix: the fallback used to be the default, so an adopting repository

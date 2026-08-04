@@ -403,6 +403,16 @@ def collect_doctor_checks(
     return checks
 
 
+def _workspace_ignores(root: Path) -> set[str]:
+    path = root / ".gitignore"
+    if not path.is_file():
+        return set()
+    try:
+        return {line.strip() for line in path.read_text(encoding="utf-8").splitlines()}
+    except (OSError, UnicodeDecodeError):
+        return set()
+
+
 def product_topology_checks(root: Path) -> list[dict[str, str]]:
     """What the plane thinks the product is, and whether it can actually index it.
 
@@ -415,6 +425,29 @@ def product_topology_checks(root: Path) -> list[dict[str, str]]:
     from scripts.ai_plane.knowledge_projection import index_adapters
 
     checks: list[dict[str, str]] = []
+    mode = products.workspace_git_mode(root)
+    if mode == products.LOCAL_WRAPPER:
+        checks.append(doctor_check(
+            "PASS", "Workspace mode",
+            "local wrapper: the workspace is not a git checkout, so git sees only what is inside "
+            f"{products.PROJECTS_ROOT}/",
+        ))
+    else:
+        missing = [entry for entry in products.workspace_ignore_entries(mode)
+                   if entry not in _workspace_ignores(root)]
+        label = ("shared plane: the workspace is versioned, so the plane travels with the team"
+                 if mode == products.SHARED_PLANE else
+                 "ignored plane: the workspace is versioned but deliberately excludes the plane")
+        if missing:
+            checks.append(doctor_check(
+                "WARN", "Workspace mode", f"{label}; .gitignore is missing {', '.join(missing)}",
+                f"A product under {products.PROJECTS_ROOT}/ carries its own .git; tracking it here "
+                "records a broken gitlink or swallows the whole checkout. Add those entries to the "
+                "WORKSPACE .gitignore -- never to a product's.",
+            ))
+        else:
+            checks.append(doctor_check("PASS", "Workspace mode", label))
+
     mixed = products.mixed_install_conflicts(root)
     discovered = products.discover_products(root)
     if mixed:

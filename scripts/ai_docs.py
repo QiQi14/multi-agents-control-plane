@@ -1984,6 +1984,8 @@ def add_docs_parser(sub: Any) -> None:
 
     from scripts.ai_plane.docs_serve import add_docs_serve_parser
     add_docs_serve_parser(docs_sub)
+    from scripts.ai_plane.docs_adopt import add_docs_adopt_parser
+    add_docs_adopt_parser(docs_sub)
     from scripts.ai_plane.docs_export import add_docs_export_parser
     add_docs_export_parser(docs_sub)
     from scripts.ai_plane.docs_sync import add_docs_sync_parser
@@ -2013,6 +2015,9 @@ def cmd_docs(args: Any) -> None:
         from scripts.ai_plane.docs_serve import cmd_docs_serve
         cmd_docs_serve(args)
         return
+    if cmd == "adopt":
+        from scripts.ai_plane.docs_adopt import cmd_docs_adopt
+        raise SystemExit(cmd_docs_adopt(args))
     if cmd == "build":
         try:
             cmd_docs_build(require_project_intelligence=project_intelligence_declared())

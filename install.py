@@ -138,6 +138,7 @@ def topology_report(target: Path) -> dict:
             for item in discovered
         ],
         "stacks": sorted({stack for item in discovered for stack in item.stacks}),
+        "git_mode": products.workspace_git_mode(target),
     }
 
 
@@ -234,6 +235,11 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
 
     if args.dry_run:
         print(f"Would install {len(paths)} file(s) into {target}")
+        print(f"Workspace mode: {describe_mode(topology['git_mode'])}")
+        planned = workspace_ignore_plan(target, topology["git_mode"])
+        if planned:
+            print("Would add to the WORKSPACE .gitignore (never a product's): "
+                  + ", ".join(planned))
         _report_topology(topology)
         print(f"Would create {len(SCAFFOLD_DIRS)} scaffold director(ies) and "
               f"{len(MEMORY_FILES)} typed-memory file(s)")
@@ -267,6 +273,9 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
             path.write_text(body, encoding="utf-8")
         entries[f".ai/memory/{name}"] = sha256(path)
 
+    missing_ignores = workspace_ignore_plan(target, topology["git_mode"])
+    if missing_ignores and not args.no_gitignore:
+        write_workspace_ignores(target, missing_ignores)
     stack_note = tailor_extensions(target, topology["stacks"])
     if stack_note and (target / ".ai" / "config.yaml").is_file():
         # Record the hash AFTER tailoring. Recording the shipped bytes made the very next run see
@@ -275,6 +284,12 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
     write_manifest(target, entries, args.with_tests)
 
     print(f"Installed {len(paths)} file(s) into {target}")
+    print(f"Workspace mode: {describe_mode(topology['git_mode'])}")
+    if missing_ignores and not args.no_gitignore:
+        print(f"Added {len(missing_ignores)} entr(y/ies) to the WORKSPACE .gitignore: "
+              + ", ".join(missing_ignores))
+    elif missing_ignores:
+        print("Workspace .gitignore is missing: " + ", ".join(missing_ignores))
     _report_topology(topology)
     if stack_note:
         print(stack_note)
@@ -290,6 +305,46 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
     print("  python scripts/ai_cli.py sync")
     print("  python scripts/ai_cli.py doctor")
     return 0
+
+
+def workspace_ignore_plan(target: Path, mode: str) -> list[str]:
+    """Ignore lines this WORKSPACE root is missing. A product's ignore policy is never touched."""
+    wanted = products.workspace_ignore_entries(mode)
+    if not wanted:
+        return []
+    path = target / ".gitignore"
+    present: set[str] = set()
+    if path.is_file():
+        try:
+            present = {line.strip() for line in path.read_text(encoding="utf-8").splitlines()}
+        except (OSError, UnicodeDecodeError):
+            present = set()
+    return [entry for entry in wanted if entry not in present]
+
+
+def write_workspace_ignores(target: Path, missing: list[str]) -> None:
+    """Append, never rewrite: whatever is already there was somebody's decision."""
+    if not missing:
+        return
+    path = target / ".gitignore"
+    existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    block = ("\n# --- control plane workspace ---\n"
+             "# A product under projects/ carries its own .git; tracking it here records a broken\n"
+             "# gitlink or swallows the whole checkout.\n")
+    path.write_text(existing + block + "\n".join(missing) + "\n", encoding="utf-8")
+
+
+def describe_mode(mode: str) -> str:
+    if mode == products.LOCAL_WRAPPER:
+        return ("local wrapper: this workspace is not a git checkout, so the plane is a disposable "
+                "shell and git only ever sees what is inside projects/.")
+    if mode == products.IGNORED_PLANE:
+        return ("ignored plane: this workspace is a git checkout that deliberately excludes the "
+                "plane, so git only tracks what is inside projects/.")
+    return ("shared plane: this workspace is a git checkout, so the plane is versioned and shared "
+            "with the team.")
 
 
 def _report_topology(topology: dict) -> None:
@@ -486,6 +541,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Remove files this installer placed and you have not modified")
     parser.add_argument("--dry-run", action="store_true", help="Print the plan and write nothing")
     parser.add_argument("--force", action="store_true", help="Overwrite conflicting existing files")
+    parser.add_argument("--no-gitignore", dest="no_gitignore", action="store_true",
+                        help="Do not add workspace-root ignore entries")
     parser.add_argument("--here", action="store_true",
                         help="Install into a product worktree anyway (see the refusal message)")
     parser.add_argument("--include-generated", action="store_true",
