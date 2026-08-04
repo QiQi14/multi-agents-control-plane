@@ -26,9 +26,38 @@ approval.
 
 ## Status
 
-**v0.2.1.** The core was built and exercised across internal repositories before being extracted,
+**v0.2.2.** The core was built and exercised across internal repositories before being extracted,
 and every gate below runs in CI, but the public CLI and the artifact schemas are pre-1.0 and may
 still change between minor versions.
+
+New in 0.2.2:
+
+- **The plane knows what your product is.** `projects/<product-id>/` is the topology, and a product
+  is discovered from an authoritative manifest — `package.json`, `Cargo.toml`, `pyproject.toml` —
+  never from a directory name. The installer refuses to install over a product's own worktree and
+  prints the move that fixes it, so the control plane and the product keep separate git, ignore
+  policy, and agent instructions.
+- **Project Intelligence indexes your source, not the plane's.** An adapter is selected from those
+  manifests and owns its own boundary: what it indexes, how to rebuild it, and what it cannot do.
+  A TypeScript/JavaScript indexer ships with it — standard library only, no `node` and no `tsc` —
+  reporting packages, modules, files, and declarations. It resolves no calls at all and says so,
+  because a graph people navigate by is worse for one invented edge than for a stated gap.
+- **Both ways of relating a workspace to git are supported and detected.** A team sharing the plane
+  commits it and must ignore `projects/`: a product carries its own `.git`, so an unignored
+  `git add .` at the workspace root records a broken gitlink or swallows the whole checkout. A
+  developer wrapping a product they do not own wants the reverse. The installer writes what the
+  mode needs into the *workspace* `.gitignore`, and never into a product's.
+- **`ai docs serve`** puts the reader on loopback with an automatic port. A `file:` URL cannot
+  validate a static application, and everyone rediscovers that the hard way.
+- **`ai docs adopt`** names product Markdown that carries no registry authority, and can freeze it
+  as legacy-untyped. Adopting a repository that already has documentation no longer fails lint on
+  files the plane had simply never looked at before.
+- `ai doctor` reports the workspace mode, the discovered products, and whether the index is
+  indexed, declared-but-unbuilt, or unavailable — three states that all used to read as "present".
+- A language extension no product manifest justifies is disabled at install. A React product does
+  not get a Rust evidence gate on a toolchain it has never had.
+- The reader's package graph descends one level at a time instead of listing every module path at
+  once. One package used to render 222 fully-qualified siblings with nothing to drill into.
 
 New in 0.2.1:
 
@@ -317,10 +346,11 @@ ai docs lint
 `lint` fails on a relation whose target does not exist, which is what stops the graph quietly
 rotting as documents are renamed or removed. Run it in CI.
 
-> **Not in 0.2.1:** the reader also has a *Project Intelligence* screen for a source-symbol graph —
-> crates, modules, files, and call edges. It needs an indexer that this release does not ship, so it
-> reports itself unconfigured and nothing else depends on it. The document and task graph above is
-> fully available.
+> **Project Intelligence** is the reader's second graph: packages, modules, files, and symbols
+> from your own source. 0.2.2 ships two indexers — Python and TypeScript/JavaScript, both standard
+> library only — selected from your product's manifests. A stack with no adapter reports itself
+> unconfigured and nothing else depends on it. The TypeScript index is structural: it does not
+> resolve call edges, and states that rather than inventing them.
 
 ---
 
