@@ -85,7 +85,11 @@ def _unit_for(path: Path, root: Path) -> tuple[str, str]:
         if not (current / "__init__.py").is_file():
             break
     unit = ".".join(unit_parts) if unit_parts else relative.stem
-    module = ".".join([*parts, relative.stem])
+    # The module tier is the reader's GROUPING level between package and file, so it is the
+    # containing directory rather than the file itself. Including the file stem made every module
+    # hold exactly one file, which turned the tier into a relabelling of the file list and left a
+    # package with hundreds of files as hundreds of flat sibling nodes with nothing in between.
+    module = ".".join(parts) if parts else unit
     return unit, module
 
 

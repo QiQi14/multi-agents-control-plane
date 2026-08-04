@@ -16,6 +16,9 @@ from scripts.ai_plane.knowledge_projection import project as projection
 from scripts.ai_plane.knowledge_projection import py_index
 
 
+BODY = "def f():\n    pass\n"
+
+
 class Fixture(unittest.TestCase):
     def repo(self, files: dict[str, str]) -> Path:
         root = Path(tempfile.mkdtemp(prefix="py-index-"))
@@ -133,6 +136,45 @@ class ContractCompatibilityTests(unittest.TestCase):
     def test_both_versions_are_accepted(self) -> None:
         self.assertIn(1, projection.SUPPORTED_CONTRACT_VERSIONS)
         self.assertIn(2, projection.SUPPORTED_CONTRACT_VERSIONS)
+
+
+
+
+class ModuleGroupingTests(Fixture):
+    """The module tier must actually group files.
+
+    A real TypeScript product rendered ~500 flat sibling nodes because module_path included the
+    file stem, so every module held exactly one file and the tier between package and file carried
+    no structure at all.
+    """
+
+    def test_files_in_one_directory_share_a_module(self) -> None:
+        root = self.repo({"scripts/__init__.py": "",
+                          "scripts/area/a.py": BODY,
+                          "scripts/area/b.py": BODY})
+        export = py_index.build_export(root, ["scripts"])
+        area = [m for m in export["modules"] if m["path"].startswith("scripts/area/")]
+        self.assertEqual(2, len(area))
+        self.assertEqual(1, len({m["module_path"] for m in area}),
+                         "files in one directory must share a module group")
+
+    def test_the_module_tier_is_not_a_relabelling_of_the_file_list(self) -> None:
+        files = {"scripts/__init__.py": ""}
+        for d in range(3):
+            for i in range(4):
+                files[f"scripts/d{d}/m{i}.py"] = BODY
+        export = py_index.build_export(self.repo(files), ["scripts"])
+        groups = {m["module_path"] for m in export["modules"]}
+        self.assertLess(len(groups), len(export["modules"]),
+                        "module_path must not be a one-to-one relabelling of files")
+
+    def test_separate_directories_stay_separate_groups(self) -> None:
+        root = self.repo({"scripts/__init__.py": "",
+                          "scripts/x/a.py": BODY,
+                          "scripts/y/b.py": BODY})
+        export = py_index.build_export(root, ["scripts"])
+        nested = [m for m in export["modules"] if m["path"].count("/") > 1]
+        self.assertEqual(2, len({m["module_path"] for m in nested}))
 
 
 if __name__ == "__main__":
