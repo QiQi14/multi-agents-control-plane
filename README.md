@@ -26,75 +26,62 @@ approval.
 
 ## Status
 
-**v0.2.2.** The core was built and exercised across internal repositories before being extracted,
-and every gate below runs in CI, but the public CLI and the artifact schemas are pre-1.0 and may
-still change between minor versions.
+**v0.2.2 is the current pre-1.0 release.** The core has been exercised across several internal repositories, and CI verifies installation, setup, and removal on Linux, macOS, and Windows with Python 3.10–3.13.
 
-New in 0.2.2:
+The public CLI and artifact schemas are not yet stable. Minor releases may introduce breaking changes while the project is tested against a broader range of repositories and workflows.
 
-- **The plane knows what your product is.** `projects/<product-id>/` is the topology, and a product
-  is discovered from an authoritative manifest — `package.json`, `Cargo.toml`, `pyproject.toml` —
-  never from a directory name. The installer refuses to install over a product's own worktree and
-  prints the move that fixes it, so the control plane and the product keep separate git, ignore
-  policy, and agent instructions.
-- **Project Intelligence indexes your source, not the plane's.** An adapter is selected from those
-  manifests and owns its own boundary: what it indexes, how to rebuild it, and what it cannot do.
-  A TypeScript/JavaScript indexer ships with it — standard library only, no `node` and no `tsc` —
-  reporting packages, modules, files, and declarations. It resolves no calls at all and says so,
-  because a graph people navigate by is worse for one invented edge than for a stated gap.
-- **Both ways of relating a workspace to git are supported and detected.** A team sharing the plane
-  commits it and must ignore `projects/`: a product carries its own `.git`, so an unignored
-  `git add .` at the workspace root records a broken gitlink or swallows the whole checkout. A
-  developer wrapping a product they do not own wants the reverse. The installer writes what the
-  mode needs into the *workspace* `.gitignore`, and never into a product's.
-- **`ai docs serve`** puts the reader on loopback with an automatic port. A `file:` URL cannot
-  validate a static application, and everyone rediscovers that the hard way.
-- **`ai docs adopt`** names product Markdown that carries no registry authority, and can freeze it
-  as legacy-untyped. Adopting a repository that already has documentation no longer fails lint on
-  files the plane had simply never looked at before.
-- `ai doctor` reports the workspace mode, the discovered products, and whether the index is
-  indexed, declared-but-unbuilt, or unavailable — three states that all used to read as "present".
-- A language extension no product manifest justifies is disabled at install. A React product does
-  not get a Rust evidence gate on a toolchain it has never had.
-- The reader's package graph descends one level at a time instead of listing every module path at
-  once. One package used to render 222 fully-qualified siblings with nothing to drill into.
+### What changed in v0.2.2
 
-New in 0.2.1:
+#### Product-aware workspaces
 
-- `ai usage build` puts the usage report in the reader, on the Overview screen. It is deliberately
-  separate from `ai docs build`: the site build is a deterministic projection meant to travel, and
-  `ai docs export` exists to be handed to someone with no checkout, so per-machine data stays out
-  of it. The asset carries per-tool aggregates only — no working-directory path, session id, or
-  branch — and an unbuilt panel says so instead of showing a zero.
-- Receipts may record the agent session that produced them, which is what lets cost be attributed
-  to the task that caused it. The field is optional, so every existing receipt stays valid
-  unedited. Attribution joins only on a recorded identity, never on branch or timing, and the
-  reader reports how many tasks are attributable so an empty table cannot read as no spend.
-- The estimate for a tool that records no tokens now follows how far its own conversation grew,
-  calibrated against tools that do report. Across 106 measured sessions the previous flat
-  per-turn multiplier put 49% of them within a factor of two; this puts 98%.
-- The graph layout settles instead of stopping after about a second. It previously ran a fixed
-  frame budget and stopped mid-flight, so the only way to continue was toggling Freeze.
+The control plane now discovers products from authoritative manifests such as `package.json`, `Cargo.toml`, and `pyproject.toml`, rather than inferring them from directory names.
 
-New since 0.1.0:
+Products live under `projects/<product-id>/`. The installer keeps the control plane and each product in separate worktrees, with separate Git state, ignore rules, and agent instructions. It detects whether the plane is shared by a team or used as a local wrapper around an external repository, and configures the workspace accordingly.
 
-- `ai usage show` reports what agent work consumed, from the records each tool already writes
-  locally. Tokens where a tool records them, subscription quota where it reports it, a labelled
-  estimate where it records neither, and unknown rather than zero where nothing can be measured.
-- `ai docs sync` refreshes the reader's task data in place, so reading a task you just finished no
-  longer means reprojecting the whole corpus.
-- The reader gained a task graph: `#/tasks?view=graph` puts the dependency structure on the same
-  interactive canvas the document graph uses, with seven relation kinds and four lifecycle states
-  each independently toggleable. `ai docs graph --tasks` writes the same structure as a static SVG.
-- `ai docs graph` reports what it wrote instead of printing SVG markup to the terminal.
+#### Project Intelligence
 
-The core carries no language, stack, or vendor policy, and CI proves a clean install, setup and
-uninstall on Linux, macOS and Windows against Python 3.10-3.13. Compatibility beyond that is
-expanding during the pre-1.0 series; if it does not fit your repository, that is a bug worth
-reporting.
+Project Intelligence now indexes product source code rather than the control plane itself.
 
-Not in this release: the *Project Intelligence* screen in the reader, which needs a source-symbol
-indexer that does not ship yet. It reports itself unconfigured and nothing else depends on it.
+Language adapters define what they can index, how their index is rebuilt, and which relationships they do not resolve. This release includes a standard-library-only TypeScript and JavaScript indexer that reports packages, modules, files, and declarations without requiring Node.js or `tsc`.
+
+Call resolution is not included yet. Missing relationships are reported as unsupported rather than inferred.
+
+The reader’s package graph now reveals the hierarchy one level at a time, avoiding large flat lists of fully qualified module paths.
+
+#### Documentation workflow
+
+`ai docs serve` starts the reader on a loopback HTTP server and selects an available port automatically.
+
+`ai docs adopt` can register existing Markdown documents without immediately granting them typed registry authority. Documents may also be frozen as `legacy-untyped`, allowing existing repositories to adopt the documentation system incrementally.
+
+`ai doctor` now reports:
+
+* the workspace mode;
+* discovered products;
+* the selected language adapters;
+* whether each project index is built, declared but not built, or unavailable.
+
+Language extensions that are not justified by a discovered product manifest are disabled during installation.
+
+### Added in v0.2.1
+
+`ai usage build` adds a local usage report to the reader’s Overview screen. Usage data remains separate from deterministic documentation builds and exported reports.
+
+Receipts may optionally record the agent session that produced them, allowing usage to be attributed to individual tasks. Attribution is based only on an explicit session identity, never inferred from branch names or timestamps.
+
+For tools that do not report token counts, estimates now use observed conversation growth rather than a flat per-turn multiplier. In the measured calibration set, the proportion of estimates within a factor of two improved from 49% to 98%.
+
+The interactive graph layout now runs until it settles instead of stopping after a fixed frame budget.
+
+### Added since v0.1.0
+
+* `ai usage show` reports locally available agent usage, including recorded tokens, subscription quota, labelled estimates, or `unknown` when no reliable measurement exists.
+* `ai docs sync` refreshes task data without rebuilding the full documentation corpus.
+* The reader includes an interactive task dependency graph with filterable relation types and lifecycle states.
+* `ai docs graph --tasks` exports the task graph as SVG.
+* `ai docs graph` reports the output path instead of writing SVG markup to the terminal.
+
+Compatibility beyond the environments covered by CI is still expanding. Repository shapes that the control plane cannot handle should be reported as bugs.
 
 ---
 
@@ -219,48 +206,36 @@ canonical evidence; the versioned record is.
 
 ### 9. Know what a task cost
 
-`ai usage show` reports what agent work consumed, reading only the records each tool already writes
-on this machine. Nothing here touches the network, a credential, or account state.
+`ai usage show` reports locally recorded agent usage without accessing the network, credentials, or account state.
 
 ```bash
 ai usage show --here
 ```
 
-Tools differ in what they record, and the report says which is which rather than smoothing it over:
-Claude Code reports tokens, Codex reports tokens *and* subscription quota, Antigravity reports
-neither and is shown as a labelled estimate range. A tool that cannot be measured reads **unknown**,
-never zero, because a zero quietly understates a total.
+Each tool is reported according to the data it actually provides:
 
-The four token classes are priced separately. In real agent sessions 96-99% of input is *cached*
-input, billed at a fraction of the input rate, so a single blended token price is wrong by roughly
-an order of magnitude. Reasoning tokens get their own line: they are billed and never appear as text.
+* Claude Code: recorded token usage
+* Codex: recorded token usage and subscription quota
+* Antigravity: labelled estimate range
+* Unsupported or unreadable tools: **unknown**, never zero
 
-Rates are yours, in `.ai/.local/billing.json`, and each one must carry an `as_of` date and a source.
-None ship with the plane — a price is a fact with a short shelf life, and a stale rate that looks
-authoritative is worse than no rate at all. Usage is advisory throughout: it never changes which tool
-a task routes to.
+Input, cached input, output, and reasoning tokens remain separate because they may be billed differently.
 
-The same report is available in the reader, on the Overview screen:
+Billing rates are configured locally in `.ai/.local/billing.json`. Every rate must include an `as_of` date and source. No rates ship with the control plane, since pricing changes too frequently to treat bundled values as authoritative.
+
+Usage remains advisory and never affects task routing.
+
+To include the report in the reader:
 
 ```bash
 ai usage build
 ```
 
-It is deliberately **not** part of `ai docs build`. That build is a deterministic projection of the
-repository and its output is meant to travel — `ai docs export` exists to be handed to someone with
-no checkout. Usage is per-machine data read from your home directory, so it is a separate, opt-in
-command, and the asset it writes carries per-tool aggregates only: no working-directory path,
-session id, or branch. `docs build` leaves the panel in a *not built* state rather than showing a
-zero.
+Usage is intentionally separate from `ai docs build`. Documentation builds are deterministic repository projections designed to be shared, while usage is machine-local data. The generated usage asset contains per-tool aggregates only and excludes working-directory paths, branches, and session identifiers.
 
-A tool that records no tokens is estimated from how far its own conversation grew — the summed
-running prefix, which is the area under the transcript rather than its length, because an agent
-re-reads its accumulated context every step. The constant is calibrated against tools that do
-report, and the result stays a labelled range whose assumptions are printed with it.
+When a tool does not record tokens, the plane estimates usage from conversation growth and presents the result as a labelled range with its assumptions.
 
-Per-task attribution is joined only through a `session_id` an agent recorded in its receipt. It is
-never inferred from branch or timing: a wrong attribution reads as a fact, and the reader reports
-how many tasks are attributable so an empty table cannot be mistaken for no spend.
+Task-level attribution is available only when a receipt records an explicit `session_id`. The plane never infers attribution from branch names or timestamps, and the reader reports how many tasks could be attributed.
 
 ### 10. Documentation you can read, and reports you can send
 
