@@ -116,22 +116,19 @@ def normalize_contract(exported: dict[str, Any]) -> dict[str, Any]:
     return rename(exported)
 
 
-PYTHON_INDEX_ROOTS = ("scripts",)
-
-
-def _python_export(root: pathlib.Path) -> dict[str, Any] | None:
-    """Index Python source, or None when there is none worth indexing.
+def _adapter_export(root: Path) -> tuple[dict[str, Any] | None, Any]:
+    """Index through the adapter the repository's own manifests select.
 
     None rather than an empty export matters: zero packages would render as a configured-but-empty
     graph, reading as "this repository has no structure" instead of "nothing here was indexable".
     """
-    from scripts.ai_plane.knowledge_projection import py_index
+    from scripts.ai_plane.knowledge_projection import index_adapters
 
-    roots = [name for name in PYTHON_INDEX_ROOTS if (root / name).is_dir()]
-    if not roots:
-        return None
-    export = py_index.build_export(root, roots)
-    return export if export["packages"] else None
+    for adapter in index_adapters.candidates(root):
+        export = adapter.build()
+        if export is not None:
+            return export, adapter
+    return None, None
 
 
 def _export_command(root: Path, database: Path) -> list[str] | None:
@@ -146,17 +143,28 @@ def _recorded_command(command: list[str]) -> list[str]:
     return recorded
 
 
-def _not_requested_agent_bundle() -> dict[str, Any]:
+def _not_requested_agent_bundle(adapter: Any = None) -> dict[str, Any]:
+    """The empty proof bundle, explained by the adapter that produced the index.
+
+    A Node product told "no live temporary ai-impact index" is being handed another stack's
+    vocabulary; the reason has to come from the adapter actually in use.
+    """
+    guidance = (
+        "Injected export data has no live temporary ai-impact index; "
+        "no semantic query result was invented."
+    )
+    if adapter is not None:
+        guidance = (
+            f"The {adapter.adapter_id} index is deterministic and answers no live queries, so no "
+            "semantic query result was invented."
+        )
     return {
         "state": "not-requested",
         "exact": False,
         "nonfabricated": True,
         "fabricated": False,
         "items": [],
-        "guidance": (
-            "Injected export data has no live temporary ai-impact index; "
-            "no semantic query result was invented."
-        ),
+        "guidance": guidance,
     }
 
 
@@ -329,9 +337,9 @@ def _load_export(
     *,
     export_data: dict[str, Any] | None,
     run: Callable[..., subprocess.CompletedProcess[str]],
-) -> tuple[dict[str, Any] | None, str | None, dict[str, Any]]:
+) -> tuple[dict[str, Any] | None, str | None, dict[str, Any], Any]:
     if export_data is not None:
-        return sanitize(export_data), None, _not_requested_agent_bundle()
+        return sanitize(export_data), None, _not_requested_agent_bundle(), None
     with tempfile.TemporaryDirectory(prefix="maw-reader-impact-") as temp:
         database = Path(temp) / "index.sqlite"
         command = _export_command(root, database)
@@ -342,17 +350,18 @@ def _load_export(
             exporter = root / "tools" / "ai-impact" / "Cargo.toml"
             if not exporter.is_file():
                 # No Rust indexer and no Cargo workspace. Before declaring the capability
-                # unconfigured, try the stdlib Python indexer: a repository whose source is Python
-                # has a real graph, it just is not a Rust one.
-                python_export = _python_export(root)
-                if python_export is not None:
-                    return sanitize(python_export), None, _not_requested_agent_bundle()
+                # unconfigured, ask the adapters: a repository whose product is TypeScript or
+                # Python has a real graph, it just is not a Rust one.
+                export, adapter = _adapter_export(root)
+                if export is not None:
+                    return sanitize(export), None, _not_requested_agent_bundle(adapter), adapter
                 return (
                     None,
                     "Project Intelligence is not configured for this repository. It is an "
                     "optional capability that indexes source symbols; the rest of the reader "
                     "does not depend on it.",
                     _not_requested_agent_bundle(),
+                    None,
                 )
             missing = [
                 rel for rel, path in (
@@ -365,7 +374,11 @@ def _load_export(
                 f"missing {', '.join(missing)}" if missing else
                 "Project Intelligence source unavailable: the exporter could not be resolved",
                 _not_requested_agent_bundle(),
+                None,
             )
+        from scripts.ai_plane.knowledge_projection import index_adapters
+        rust = next((item for item in index_adapters.candidates(root)
+                     if item.stack == "rust"), None)
         try:
             completed = run(
                 command,
@@ -382,6 +395,7 @@ def _load_export(
                 "could not launch Cargo for the governed ai-impact export "
                 f"({error}); install or enable Cargo and rerun the docs build",
                 _not_requested_agent_bundle(),
+                rust,
             )
         if completed.returncode != 0:
             detail = (
@@ -393,6 +407,7 @@ def _load_export(
                 None,
                 f"governed ai-impact Cargo build/export failed: {detail}",
                 _not_requested_agent_bundle(),
+                rust,
             )
         try:
             payload = json.loads(_captured_text(completed.stdout))
@@ -401,12 +416,14 @@ def _load_export(
                 None,
                 f"ai-impact export returned invalid JSON: {error}",
                 _not_requested_agent_bundle(),
+                rust,
             )
         if not isinstance(payload, dict):
             return (
                 None,
                 "ai-impact export returned a non-object JSON payload",
                 _not_requested_agent_bundle(),
+                rust,
             )
         exported = sanitize(payload)
         agent_bundles = _capture_agent_result_bundles(
@@ -415,7 +432,7 @@ def _load_export(
             exported,
             run=run,
         )
-        return exported, None, agent_bundles
+        return exported, None, agent_bundles, rust
 
 
 def _group(key: str, label: str, derivation: str) -> dict[str, str]:
@@ -567,6 +584,32 @@ def _build_views(export: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _boundary_facts(root: Path, adapter: Any) -> dict[str, Any]:
+    """Boundary vocabulary from the adapter that produced the index.
+
+    Written at the presentation layer, this told a Node workspace to rebuild with Cargo. What a
+    graph indexed, how to refresh it, and what it excludes are facts only the adapter holds.
+    """
+    from scripts.ai_plane.knowledge_projection import index_adapters
+
+    if adapter is not None:
+        return {
+            "indexed_roots": list(adapter.indexed_roots),
+            "include_rules": list(adapter.include_rules),
+            "exclude_rules": list(adapter.exclude_rules),
+            "rebuild_guidance": adapter.rebuild_guidance,
+            "provenance": adapter.describe(),
+        }
+    fallback = index_adapters.unavailable_boundary_fields(root)
+    return {
+        "indexed_roots": fallback["indexed_roots"],
+        "include_rules": ["deterministic index export contract"],
+        "exclude_rules": ["unresolved references as semantic edges"],
+        "rebuild_guidance": fallback["rebuild_guidance"],
+        "provenance": None,
+    }
+
+
 def build_project_intelligence(
     root: Path,
     *,
@@ -574,23 +617,21 @@ def build_project_intelligence(
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> dict[str, Any]:
     """Load, validate, and enrich the accepted deterministic ai-impact export."""
-    exported, error, agent_result_bundles = _load_export(
+    exported, error, agent_result_bundles, adapter = _load_export(
         root, export_data=export_data, run=run,
     )
+    facts = _boundary_facts(root, adapter)
     if exported is None:
         return {
             "boundary": boundary(
                 "unavailable",
                 fingerprint_value=None,
-                indexed_roots=["project/"],
-                include_rules=["deterministic index export contract"],
-                exclude_rules=["SQLite internals", "pending references as semantic edges"],
+                indexed_roots=facts["indexed_roots"],
+                include_rules=facts["include_rules"],
+                exclude_rules=facts["exclude_rules"],
                 omitted_count=1,
                 errors=[error or "unknown export failure"],
-                rebuild_guidance=(
-                    "Rerun `python scripts/ai_cli.py docs build`; it compiles the governed "
-                    "tools/ai-impact source with Cargo --locked before exporting."
-                ),
+                rebuild_guidance=facts["rebuild_guidance"],
             ),
             "contract_version": None,
             "packages": [],
@@ -683,15 +724,12 @@ def build_project_intelligence(
         "boundary": boundary(
             state,
             fingerprint_value=fingerprint(semantic),
-            indexed_roots=["project/Cargo.toml", "project/crates/"],
-            include_rules=["deterministic index export contract", "resolved semantic relations"],
-            exclude_rules=["SQLite internals", "pending references as edges", "presentation groups as semantics"],
+            indexed_roots=facts["indexed_roots"],
+            include_rules=facts["include_rules"],
+            exclude_rules=facts["exclude_rules"],
             omitted_count=len(validation_errors),
             errors=validation_errors,
-            rebuild_guidance=(
-                "Rerun `python scripts/ai_cli.py docs build`; it compiles the governed "
-                "tools/ai-impact source with Cargo --locked before exporting."
-            ),
+            rebuild_guidance=facts["rebuild_guidance"],
         ),
         **semantic,
     }

@@ -398,7 +398,72 @@ def collect_doctor_checks(
                 )
             )
 
+    checks.extend(product_topology_checks(root))
     checks.append(lock_inspector(root, ai))
+    return checks
+
+
+def product_topology_checks(root: Path) -> list[dict[str, str]]:
+    """What the plane thinks the product is, and whether it can actually index it.
+
+    Two silent states cost a whole adoption. A workspace that is also a product worktree looks fine
+    until Git, ignore policy, and agent instructions start colliding. And an index capability that
+    was merely PRESENT got reported as working, when in truth it can be declared, unindexed, or
+    unavailable -- three situations with three different remedies.
+    """
+    from scripts.ai_plane import products
+    from scripts.ai_plane.knowledge_projection import index_adapters
+
+    checks: list[dict[str, str]] = []
+    mixed = products.mixed_install_conflicts(root)
+    discovered = products.discover_products(root)
+    if mixed:
+        checks.append(doctor_check(
+            "WARN", "Topology",
+            "workspace root is also a product worktree: " + "; ".join(mixed),
+            f"Move the product under {products.PROJECTS_ROOT}/<product-id>/ so the control plane "
+            "and the product keep separate Git, ignore policy, and agent instructions.",
+        ))
+    elif discovered:
+        checks.append(doctor_check("PASS", "Topology", ", ".join(
+            f"{item.product_id} at {item.relative_path} [{', '.join(item.stacks) or 'no stack'}]"
+            for item in discovered)))
+    else:
+        checks.append(doctor_check(
+            "WARN", "Topology", "no product manifest was discovered",
+            f"Place the product under {products.PROJECTS_ROOT}/<product-id>/ so Project "
+            "Intelligence indexes your application rather than the plane's own scripts.",
+        ))
+
+    adapters = index_adapters.candidates(root)
+    marker = root / ".codegraph"
+    if not adapters:
+        checks.append(doctor_check(
+            "WARN", "Project Intelligence", "unavailable: no adapter matches any discovered stack",
+            index_adapters.unavailable_boundary_fields(root)["rebuild_guidance"],
+        ))
+        if marker.exists():
+            checks.append(doctor_check(
+                "WARN", "CodeGraph",
+                ".codegraph/ exists but nothing here can query it",
+                "That marker is an index artifact, not a capability. Remove it, or install the "
+                "tool that wrote it.",
+            ))
+        return checks
+    adapter = adapters[0]
+    if not (root / ".ai" / "_site" / "assets" / "project-data.js").is_file():
+        checks.append(doctor_check(
+            "WARN", "Project Intelligence",
+            f"declared but not indexed: {adapter.adapter_id} would index "
+            f"{', '.join(adapter.indexed_roots)}",
+            "Build the index with: python scripts/ai_cli.py docs build",
+        ))
+    else:
+        checks.append(doctor_check(
+            "PASS", "Project Intelligence",
+            f"indexed by {adapter.adapter_id} ({adapter.stack}) for product "
+            f"{adapter.product_id}: {', '.join(adapter.indexed_roots)}",
+        ))
     return checks
 
 

@@ -27,7 +27,7 @@ _spec.loader.exec_module(install)
 def args(**overrides) -> argparse.Namespace:
     base = {
         "update": False, "uninstall": False, "dry_run": False,
-        "force": False, "with_tests": False, "include_generated": False,
+        "force": False, "with_tests": False, "include_generated": False, "here": False,
     }
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -214,6 +214,97 @@ class GeneratedAdapterRemovalTests(InstallerFixture):
         removed, kept = install.remove_generated(self.target)
         self.assertEqual(([], []), (removed, kept))
         self.assertTrue((self.target / "AGENTS.md").is_file())
+
+
+class TopologyGuardTests(InstallerFixture):
+    """The control plane must refuse to become the product it coordinates.
+
+    Sharing one directory coupled the two Git checkouts, pushed control-plane paths into the
+    product's .gitignore, and set two AGENTS.md files against each other -- all of it repaired by
+    hand, after the fact, in the adopting repository.
+    """
+
+    def test_installing_over_a_product_worktree_is_refused(self) -> None:
+        (self.target / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(1, code)
+        self.assertIn("product worktree, not a workspace", output)
+        self.assertIn("projects/<product-id>", output)
+        self.assertEqual(self.their_files() | {"package.json"}, self.files())
+
+    def test_the_refusal_can_be_overridden_deliberately(self) -> None:
+        (self.target / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        code, _ = run(install.do_install, self.target, args(here=True))
+        self.assertEqual(0, code)
+
+    def test_a_nested_product_installs_without_complaint(self) -> None:
+        nested = self.target / "projects" / "their-app"
+        nested.mkdir(parents=True)
+        (nested / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertIn("their-app: projects/their-app [node]", output)
+
+    def test_product_owned_files_are_never_written(self) -> None:
+        """Collision avoidance belongs in the topology, not inside someone's repository."""
+        nested = self.target / "projects" / "their-app"
+        nested.mkdir(parents=True)
+        (nested / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        (nested / ".gitignore").write_text("dist/\n", encoding="utf-8")
+        (nested / "AGENTS.md").write_text("# their instructions\n", encoding="utf-8")
+        run(install.do_install, self.target, args())
+        self.assertEqual("dist/\n", (nested / ".gitignore").read_text(encoding="utf-8"))
+        self.assertEqual("# their instructions\n", (nested / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_the_payload_stays_on_the_control_plane_surface(self) -> None:
+        """A payload path outside .ai/, scripts/, or the launcher would be writing into a product."""
+        self.assertEqual([], install.off_surface(install.payload(include_tests=True)))
+
+    def test_an_off_surface_payload_stops_the_install(self) -> None:
+        """Asserting only on the helper leaves the CALL removable: the check has to be reachable
+        from do_install, which is the thing that writes files."""
+        original = install.TREES
+        try:
+            install.TREES = original + ["examples"]
+            code, output = run(install.do_install, self.target, args())
+        finally:
+            install.TREES = original
+        self.assertEqual(1, code)
+        self.assertIn("outside the control-plane surface", output)
+        self.assertEqual(self.their_files(), self.files())
+
+    def test_a_language_extension_no_manifest_justifies_is_disabled(self) -> None:
+        """The Rust extension makes cargo evidence a merge requirement. Enabling it on a
+        React/NestJS product is a gate nobody asked for, on a toolchain that is not installed."""
+        nested = self.target / "projects" / "their-app"
+        nested.mkdir(parents=True)
+        (nested / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertIn("Disabled 1 language extension", output)
+        config = (self.target / ".ai" / "config.yaml").read_text(encoding="utf-8")
+        self.assertIn("# - rust", config)
+        for kept in ("- codex", "- claude", "- antigravity"):
+            self.assertIn(kept, config)
+
+    def test_a_rust_product_keeps_the_rust_extension(self) -> None:
+        nested = self.target / "projects" / "their-app"
+        nested.mkdir(parents=True)
+        (nested / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertNotIn("Disabled", output)
+        self.assertIn("- rust", (self.target / ".ai" / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_tailoring_does_not_make_the_next_install_see_drift(self) -> None:
+        """The manifest must record what is on disk after tailoring, or the very next run refuses."""
+        nested = self.target / "projects" / "their-app"
+        nested.mkdir(parents=True)
+        (nested / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        run(install.do_install, self.target, args())
+        code, output = run(install.do_install, self.target, args())
+        self.assertEqual(0, code)
+        self.assertIn("nothing has drifted", output)
 
 
 class WriteBoundaryTests(unittest.TestCase):

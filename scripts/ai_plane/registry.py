@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import scripts.ai_plane.constants as constants
+import scripts.ai_plane.products as products
 import scripts.extension_registry as extension_registry
 from scripts.ai_plane.frontmatter import parse_frontmatter
 
@@ -17,6 +18,34 @@ LEGACY_BASELINE_SCHEMA_VERSION = 1
 
 CONTROL_PLANE_CORPUS = "control-plane"
 PRODUCT_CORPUS = "product"
+
+# The singular `project/docs` is the legacy spelling. It stays valid so an existing repository keeps
+# working, but the plural `projects/<product-id>/docs` is the contract, and which one is live is
+# DISCOVERED rather than assumed -- assuming it is what left one product's documentation in two
+# places at once with the reader still reading the stale mirror.
+LEGACY_PRODUCT_DOC_ROOT = f"{products.LEGACY_PROJECT_ROOT}/docs"
+PRODUCT_DOC_PATH_PATTERN = (
+    rf"(?:{products.LEGACY_PROJECT_ROOT}|{products.PROJECTS_ROOT}/[A-Za-z0-9._-]+)"
+    r"/docs/[A-Za-z0-9._/-]+\.md"
+)
+
+
+def product_document_roots(root: Path) -> list[str]:
+    """Live product-documentation roots, legacy spelling included when it still exists."""
+    found = [item for item in products.product_document_roots(root) if item != "docs"]
+    legacy = root / LEGACY_PRODUCT_DOC_ROOT
+    if legacy.is_dir() and LEGACY_PRODUCT_DOC_ROOT not in found:
+        found.append(LEGACY_PRODUCT_DOC_ROOT)
+    return found
+
+
+def _strip_product_root(rel_path: str) -> str:
+    """Drop whichever product-documentation root a file actually came from."""
+    if rel_path.startswith(LEGACY_PRODUCT_DOC_ROOT + "/"):
+        return rel_path[len(LEGACY_PRODUCT_DOC_ROOT) + 1:]
+    if rel_path.startswith(products.PROJECTS_ROOT + "/") and "/docs/" in rel_path:
+        return rel_path.split("/docs/", 1)[1]
+    return rel_path
 
 CONTROL_PLANE_TYPES = {
     "agent", "config", "decision", "memory", "migration", "project-doc", "rule", "skill",
@@ -176,7 +205,7 @@ def _load_product_legacy_baseline(target_ai: Path) -> tuple[dict[str, str], list
         path_value = record.get("path")
         digest = record.get("sha256")
         valid_path = isinstance(path_value, str) and bool(
-            re.fullmatch(r"project/docs/[A-Za-z0-9._/-]+\.md", path_value)
+            re.fullmatch(PRODUCT_DOC_PATH_PATTERN, path_value)
         ) and ".." not in PurePosixPath(path_value).parts
         if not valid_path:
             errors.append(f"Invalid product-document legacy baseline path at record {index}: {path_value!r}")
@@ -284,7 +313,7 @@ def _legacy_product_entry(file_path: Path, rel_path: str, body: str, digest: str
             break
     return {
         "id": "legacy-product-" + re.sub(
-            r"[^a-z0-9]+", "-", rel_path.removeprefix("project/docs/").removesuffix(".md").lower()
+            r"[^a-z0-9]+", "-", _strip_product_root(rel_path).removesuffix(".md").lower()
         ).strip("-"),
         "path": rel_path,
         "corpus": PRODUCT_CORPUS,
@@ -405,9 +434,13 @@ def generate_registry(ai_root: Path | None = None, *,
 
     baseline, baseline_errors = _load_product_legacy_baseline(target_ai)
     errors.extend(baseline_errors)
-    product_root = target_ai.parent / "project" / "docs"
-    if product_root.exists():
+    # Discovered, never assumed. A hard-coded singular `project/docs` is what left one product's
+    # documentation in two places at once, with the reader still reading the stale mirror.
+    for relative_root in product_document_roots(target_ai.parent):
+        product_root = target_ai.parent / relative_root
         for file_path in sorted(product_root.rglob("*.md")):
+            if products.is_excluded(file_path.relative_to(target_ai.parent)):
+                continue
             rel_path = _repo_relative(file_path, target_ai)
             try:
                 raw = file_path.read_bytes()
@@ -487,7 +520,8 @@ def generate_registry(ai_root: Path | None = None, *,
         "generator": "ai sync",
         "corpora": [
             {"id": CONTROL_PLANE_CORPUS, "path_root": ".ai/"},
-            {"id": PRODUCT_CORPUS, "path_root": "project/docs/"},
+            {"id": PRODUCT_CORPUS,
+             "path_root": (product_document_roots(target_ai.parent) or [LEGACY_PRODUCT_DOC_ROOT])[0] + "/"},
         ],
         "documents": [documents_map[key] for key in sorted(documents_map)],
         "unresolved_references": sorted(unresolved_references),

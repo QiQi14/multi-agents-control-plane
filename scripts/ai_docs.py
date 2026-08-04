@@ -1982,6 +1982,8 @@ def add_docs_parser(sub: Any) -> None:
     docs_graph_p.add_argument("--stdout", action="store_true",
                               help="Print the SVG markup instead of reporting where it was written")
 
+    from scripts.ai_plane.docs_serve import add_docs_serve_parser
+    add_docs_serve_parser(docs_sub)
     from scripts.ai_plane.docs_export import add_docs_export_parser
     add_docs_export_parser(docs_sub)
     from scripts.ai_plane.docs_sync import add_docs_sync_parser
@@ -1995,13 +1997,22 @@ def project_intelligence_declared() -> bool:
     corpus to describe. A repository that runs the control plane without one still gets a full
     control-plane reader, so the build degrades instead of failing on a source it never had.
     """
+    from scripts.ai_plane.knowledge_projection import index_adapters
+
     root = constants.ROOT
-    return (root / "tools" / "ai-impact" / "Cargo.toml").is_file()
+    if (root / "tools" / "ai-impact" / "Cargo.toml").is_file():
+        return True
+    return any(adapter.product_id != "(control plane)"
+               for adapter in index_adapters.candidates(root))
 
 
 def cmd_docs(args: Any) -> None:
     """Handle ai docs subcommand execution."""
     cmd = getattr(args, "docs_command", "")
+    if cmd == "serve":
+        from scripts.ai_plane.docs_serve import cmd_docs_serve
+        cmd_docs_serve(args)
+        return
     if cmd == "build":
         try:
             cmd_docs_build(require_project_intelligence=project_intelligence_declared())

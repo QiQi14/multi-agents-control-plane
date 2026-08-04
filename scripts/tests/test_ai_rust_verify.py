@@ -10,6 +10,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+from scripts.ai_plane import doctor
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -103,6 +105,18 @@ class AiCliDoctorAndLauncherTests(unittest.TestCase):
             }),
             encoding="utf-8",
         )
+        # A HEALTHY workspace has a product in it and an index built from it. Leaving both out and
+        # then asserting "every check passes" would have made the two new states unassertable:
+        # a fixture that omits the thing under test cannot fail when it breaks.
+        product = self.root / "projects" / "their-app"
+        (product / "src").mkdir(parents=True)
+        (product / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        (product / "src" / "index.ts").write_text("export function go() {}\n", encoding="utf-8")
+        site_assets = self.ai / "_site" / "assets"
+        site_assets.mkdir(parents=True)
+        (site_assets / "project-data.js").write_text(
+            "window.CONTROL_PLANE_PROJECT = {};\n", encoding="utf-8")
+
         rust_verify_json = REPO_ROOT / ".ai" / "project" / "rust-verification.json"
         if rust_verify_json.exists():
             (self.ai / "project" / "rust-verification.json").write_text(
@@ -388,6 +402,75 @@ class AiCliRustVerifyWiringTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             ai_cli.main(["cargo-cache"])
         self.rust_verify.cmd_cargo_cache.assert_not_called()
+
+
+class TopologyAndIndexStateTests(unittest.TestCase):
+    """Two silent states cost a whole adoption, so both have to be reported, not merely available.
+
+    A workspace that is also a product worktree looks fine until Git, ignore policy, and agent
+    instructions collide. And an index capability that is merely PRESENT was reported as working
+    when it was in truth declared-but-unbuilt.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def names(self, checks: list[dict[str, str]]) -> dict[str, str]:
+        return {check["name"]: check["status"] for check in checks}
+
+    def product(self, relative: str = "projects/their-app") -> Path:
+        product = self.root / relative
+        (product / "src").mkdir(parents=True)
+        (product / "package.json").write_text('{"name":"their-app"}', encoding="utf-8")
+        (product / "src" / "index.ts").write_text("export function go() {}\n", encoding="utf-8")
+        return product
+
+    def test_the_topology_check_is_always_emitted(self) -> None:
+        self.product()
+        self.assertIn("Topology", self.names(doctor.product_topology_checks(self.root)))
+
+    def test_a_product_worktree_warns(self) -> None:
+        (self.root / "package.json").write_text('{"name":"app"}', encoding="utf-8")
+        found = self.names(doctor.product_topology_checks(self.root))
+        self.assertEqual("WARN", found["Topology"])
+
+    def test_a_workspace_with_no_product_warns(self) -> None:
+        found = self.names(doctor.product_topology_checks(self.root))
+        self.assertEqual("WARN", found["Topology"])
+
+    def test_a_declared_but_unbuilt_index_warns(self) -> None:
+        self.product()
+        checks = doctor.product_topology_checks(self.root)
+        found = self.names(checks)
+        self.assertEqual("WARN", found["Project Intelligence"])
+        detail = next(c["detail"] for c in checks if c["name"] == "Project Intelligence")
+        self.assertIn("declared but not indexed", detail)
+
+    def test_a_built_index_passes_and_names_its_adapter(self) -> None:
+        self.product()
+        assets = self.root / ".ai" / "_site" / "assets"
+        assets.mkdir(parents=True)
+        (assets / "project-data.js").write_text("window.CONTROL_PLANE_PROJECT = {};\n",
+                                                encoding="utf-8")
+        checks = doctor.product_topology_checks(self.root)
+        self.assertEqual("PASS", self.names(checks)["Project Intelligence"])
+        detail = next(c["detail"] for c in checks if c["name"] == "Project Intelligence")
+        self.assertIn("ts-structural", detail)
+
+    def test_a_codegraph_marker_without_a_query_path_is_named(self) -> None:
+        """The marker is an index artifact, not a capability; treating it as one sent a whole
+        session hunting for a CLI that was never installed."""
+        (self.root / ".codegraph").mkdir()
+        found = self.names(doctor.product_topology_checks(self.root))
+        self.assertEqual("WARN", found["CodeGraph"])
+
+    def test_the_checks_reach_the_doctor_run(self) -> None:
+        """Emitting them is not enough; collect_doctor_checks has to include them."""
+        self.product()
+        source = (Path(doctor.__file__)).read_text(encoding="utf-8")
+        self.assertIn("checks.extend(product_topology_checks(root))", source)
 
 
 if __name__ == "__main__":

@@ -24,8 +24,25 @@ import sys
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parent
+if str(SOURCE) not in sys.path:
+    sys.path.insert(0, str(SOURCE))
+from scripts.ai_plane import products  # noqa: E402  (stdlib-only, source-local)
+
 MANIFEST_REL = Path(".ai/.install-manifest.json")
 MANIFEST_SCHEMA = 1
+
+# The control plane coordinates work ON a product; it is not the product. Installing it over a
+# product's own worktree is what coupled the two Git directories, put control-plane paths into the
+# product's .gitignore, and set two AGENTS.md files against each other. The topology is:
+#
+#     <workspace>/            the control plane
+#     <workspace>/projects/   products, one directory per product id
+#
+# Anything the installer would write outside this surface is a bug, so the surface is declared.
+INSTALL_SURFACE_ROOTS = (".ai/", "scripts/", "ai", "ai.cmd")
+# Product-owned files. The installer never writes them and `ai sync` never generates into a
+# product; collision avoidance belongs in the topology, not inside someone's repository.
+PRODUCT_OWNED = (".gitignore", ".gitattributes", ".git")
 
 # Canonical control-plane content. Generated adapters (AGENTS.md, CLAUDE.md, GEMINI.md, .claude/,
 # .agents/) are deliberately absent: `ai sync` produces them from `.ai/`, so shipping them would
@@ -101,6 +118,29 @@ def payload(include_tests: bool) -> list[str]:
     return sorted(set(out))
 
 
+def off_surface(paths: list[str]) -> list[str]:
+    """Payload paths that would land outside the control-plane surface."""
+    return [
+        rel for rel in paths
+        if not any(rel == root or rel.startswith(root) for root in INSTALL_SURFACE_ROOTS)
+    ]
+
+
+def topology_report(target: Path) -> dict:
+    """What this target already is, before anything is written to it."""
+    conflicts = products.mixed_install_conflicts(target)
+    discovered = products.discover_products(target)
+    return {
+        "mixed": conflicts,
+        "products": [
+            {"id": item.product_id, "path": item.relative_path,
+             "stacks": list(item.stacks), "nested": item.nested}
+            for item in discovered
+        ],
+        "stacks": sorted({stack for item in discovered for stack in item.stacks}),
+    }
+
+
 def read_manifest(target: Path) -> dict:
     path = target / MANIFEST_REL
     if not path.is_file():
@@ -139,6 +179,32 @@ def describe_conflicts(target: Path, paths: list[str], installed: dict[str, str]
 
 def do_install(target: Path, args: argparse.Namespace) -> int:
     paths = payload(args.with_tests)
+    escaped = off_surface(paths)
+    if escaped:
+        print("Refusing to install: these payload paths are outside the control-plane surface "
+              f"({', '.join(INSTALL_SURFACE_ROOTS)}):", file=sys.stderr)
+        for rel in escaped[:10]:
+            print(f"  {rel}", file=sys.stderr)
+        return 1
+
+    topology = topology_report(target)
+    if topology["mixed"] and not getattr(args, "here", False):
+        print(f"Refusing to install into {target}: it is a product worktree, not a workspace.",
+              file=sys.stderr)
+        for reason in topology["mixed"]:
+            print(f"  - {reason}", file=sys.stderr)
+        print(
+            "\nThe control plane coordinates work ON a product; it is not the product. Sharing"
+            "\none directory couples the two Git checkouts, pushes control-plane paths into the"
+            "\nproduct's .gitignore, and puts two AGENTS.md files in conflict.",
+            file=sys.stderr)
+        print("\nDo this instead:", file=sys.stderr)
+        print("  mkdir ../workspace && cd ../workspace", file=sys.stderr)
+        print(f"  mv {target} projects/<product-id>", file=sys.stderr)
+        print("  python <plane>/install.py .", file=sys.stderr)
+        print("\nOr pass --here if you have decided the two really do share a directory.",
+              file=sys.stderr)
+        return 1
     # Always consult the manifest, not just under --update: a plain re-install must recognise the
     # files it placed itself. Reading it only under --update made a second run report every
     # installed file as a conflict.
@@ -168,6 +234,7 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
 
     if args.dry_run:
         print(f"Would install {len(paths)} file(s) into {target}")
+        _report_topology(topology)
         print(f"Would create {len(SCAFFOLD_DIRS)} scaffold director(ies) and "
               f"{len(MEMORY_FILES)} typed-memory file(s)")
         existing_generated = [g for g in GENERATED_BY_SYNC if (target / g.rstrip('/')).exists()]
@@ -200,9 +267,17 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
             path.write_text(body, encoding="utf-8")
         entries[f".ai/memory/{name}"] = sha256(path)
 
+    stack_note = tailor_extensions(target, topology["stacks"])
+    if stack_note and (target / ".ai" / "config.yaml").is_file():
+        # Record the hash AFTER tailoring. Recording the shipped bytes made the very next run see
+        # its own edit as drift and refuse to reinstall.
+        entries[".ai/config.yaml"] = sha256(target / ".ai" / "config.yaml")
     write_manifest(target, entries, args.with_tests)
 
     print(f"Installed {len(paths)} file(s) into {target}")
+    _report_topology(topology)
+    if stack_note:
+        print(stack_note)
     existing_generated = [g for g in GENERATED_BY_SYNC if (target / g.rstrip('/')).exists()]
     if existing_generated:
         print("\nWARNING: `ai sync` generates these, and will replace what is there now:")
@@ -215,6 +290,62 @@ def do_install(target: Path, args: argparse.Namespace) -> int:
     print("  python scripts/ai_cli.py sync")
     print("  python scripts/ai_cli.py doctor")
     return 0
+
+
+def _report_topology(topology: dict) -> None:
+    if topology["products"]:
+        print("\nProducts discovered from manifests:")
+        for item in topology["products"]:
+            where = item["path"] if item["nested"] else f"{item['path']} (workspace root)"
+            stacks = ", ".join(item["stacks"]) or "no detected stack"
+            print(f"  {item['id']}: {where} [{stacks}]")
+    else:
+        print("\nNo product discovered. Place one under projects/<product-id>/ so Project"
+              "\nIntelligence indexes your application rather than the control plane's own"
+              "\nscripts.")
+
+
+# Language extensions carry gates: the Rust one makes `cargo` evidence a merge requirement. Enabling
+# it on a React/NestJS product because it happened to be in the shipped default is a gate nobody
+# asked for, on a toolchain that is not installed.
+STACK_EXTENSIONS = {"rust": "rust"}
+
+
+def tailor_extensions(target: Path, stacks: list[str]) -> str:
+    """Disable language extensions no discovered product's manifests justify."""
+    config = target / ".ai" / "config.yaml"
+    if not config.is_file():
+        return ""
+    lines = config.read_text(encoding="utf-8").splitlines(keepends=True)
+    removed: list[str] = []
+    kept: list[str] = []
+    in_enabled = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "enabled:":
+            in_enabled = True
+            continue
+        if in_enabled:
+            if not stripped.startswith("- "):
+                in_enabled = False
+                continue
+            name = stripped[2:].strip()
+            required_stack = next((s for s, ext in STACK_EXTENSIONS.items() if ext == name), None)
+            if required_stack is not None and required_stack not in stacks:
+                lines[index] = line.replace("- " + name, "# - " + name, 1)
+                removed.append(name)
+            else:
+                kept.append(name)
+    if not removed:
+        return ""
+    config.write_text("".join(lines), encoding="utf-8")
+    detected = ", ".join(stacks) or "none"
+    return (
+        f"\nDisabled {len(removed)} language extension(s) no product manifest justifies: "
+        f"{', '.join(removed)}."
+        f"\n  Detected stacks: {detected}. Re-enable any of them in .ai/config.yaml under"
+        "\n  extensions.enabled."
+    )
 
 
 def remove_generated(target: Path) -> tuple[list[str], list[str]]:
@@ -355,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Remove files this installer placed and you have not modified")
     parser.add_argument("--dry-run", action="store_true", help="Print the plan and write nothing")
     parser.add_argument("--force", action="store_true", help="Overwrite conflicting existing files")
+    parser.add_argument("--here", action="store_true",
+                        help="Install into a product worktree anyway (see the refusal message)")
     parser.add_argument("--include-generated", action="store_true",
                         help="On uninstall, also remove generated adapters "
                              "(AGENTS.md, CLAUDE.md, GEMINI.md, .claude/, .agents/)")
