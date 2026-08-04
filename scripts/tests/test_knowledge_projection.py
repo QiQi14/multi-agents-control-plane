@@ -1003,6 +1003,8 @@ class AcceptedReaderRendererTests(unittest.TestCase):
             / "project.js"
         )
         fixture = {
+            # Two modules, not one: with a single module the package level correctly collapses
+            # the pass-through and shows the file itself, which would exercise no module group.
             "nodes": [{
                 "id": "symbol-id",
                 "path": "crates/display/src/lib.rs",
@@ -1014,12 +1016,32 @@ class AcceptedReaderRendererTests(unittest.TestCase):
                 "outgoing": 0,
                 "public": "rust_raw::mod::item",
                 "qualifiedName": "item",
+            }, {
+                "id": "other-symbol-id",
+                "path": "crates/display/src/other.rs",
+                "kind": "function",
+                "crate": "rust_raw",
+                "module": "other",
+                "pending": 0,
+                "incoming": 0,
+                "outgoing": 0,
+                "public": "rust_raw::other::item",
+                "qualifiedName": "item",
             }],
             "files": [{
                 "path": "crates/display/src/lib.rs",
                 "name": "lib.rs",
                 "crate": "rust_raw",
                 "module": "mod",
+                "nodes": 1,
+                "pending": 0,
+                "incoming": 0,
+                "outgoing": 0,
+            }, {
+                "path": "crates/display/src/other.rs",
+                "name": "other.rs",
+                "crate": "rust_raw",
+                "module": "other",
                 "nodes": 1,
                 "pending": 0,
                 "incoming": 0,
@@ -1032,9 +1054,9 @@ class AcceptedReaderRendererTests(unittest.TestCase):
                 "unitName": "rust_raw",
                 "packageId": "raw-package-id",
                 "purpose": {"value": "Governed object-shaped crate purpose."},
-                "nodes": 1,
+                "nodes": 2,
             }],
-            "counts": {"nodes": 1},
+            "counts": {"nodes": 2},
             "proofSelection": {"candidates": []},
             "views": {
                 "workspace": {"visible_nodes": [
@@ -1067,6 +1089,15 @@ class AcceptedReaderRendererTests(unittest.TestCase):
                             "identity": "module:rust_raw:mod",
                             "label": "mod",
                             "presentation_group": {"key": "from-view-crate-module"},
+                            "source_context": {
+                                "package_id": "raw-package-id",
+                                "unit_name": "rust_raw",
+                            },
+                        },
+                        {
+                            "identity": "module:rust_raw:other",
+                            "label": "other",
+                            "presentation_group": {"key": "from-view-crate-module-other"},
                             "source_context": {
                                 "package_id": "raw-package-id",
                                 "unit_name": "rust_raw",
@@ -1164,7 +1195,8 @@ process.stdout.write(JSON.stringify(result));
             [node["group"] for node in models["workspace"]["nodes"]],
         )
         self.assertEqual(
-            ["from-view-crate-root", "from-view-crate-module"],
+            ["from-view-crate-root", "from-view-crate-module",
+             "from-view-crate-module-other"],
             [node["group"] for node in models["crate"]["nodes"]],
         )
         self.assertEqual(
@@ -1176,10 +1208,154 @@ process.stdout.write(JSON.stringify(result));
             [node["group"] for node in models["file"]["nodes"]],
         )
         self.assertEqual(
-            ["crate:display-route", "module:display-route|mod"],
+            ["crate:display-route", "module:display-route|mod",
+             "module:display-route|other"],
             [node["id"] for node in models["crate"]["nodes"]],
         )
         self.assertEqual("Governed object-shaped crate purpose.", models["purpose"])
+
+
+class ProjectDrilldownBehaviourTests(unittest.TestCase):
+    """What the reader actually RENDERS, level by level.
+
+    The source-level guards in test_ai_reader_graph could not see that a module level selected its
+    files by whole-path equality: every assertion stayed green while a real branch rendered
+    one node and hid the 113 files beneath it. These run the shipped project.js and walk the
+    descent.
+    """
+
+    def project_js(self) -> Path:
+        return (
+            Path(__file__).resolve().parents[2]
+            / "scripts" / "ai_plane" / "knowledge_projection"
+            / "reader_assets" / "production" / "project.js"
+        )
+
+    def walk(self, files: list[tuple[str, str]], crate: str = "app") -> dict:
+        """Descend every level of one package and report what each one showed.
+
+        `files` is (path, module_path) -- the only two fields the tiering reads.
+        """
+        fixture = {
+            "nodes": [], "edges": [], "counts": {"nodes": len(files)},
+            "proofSelection": {"candidates": []},
+            "clusters": [{"id": crate, "label": crate, "unitName": crate,
+                          "packageId": crate, "nodes": len(files)}],
+            "files": [{"path": path, "name": path.split("/")[-1], "crate": crate,
+                       "module": module, "nodes": 1, "pending": 0,
+                       "incoming": 0, "outgoing": 0} for path, module in files],
+            "views": {"workspace": None, "crates": [], "modules": [], "files": []},
+        }
+        for index, (path, module) in enumerate(files):
+            fixture["nodes"].append({
+                "id": f"symbol-{index}", "path": path, "kind": "function", "crate": crate,
+                "module": module, "pending": 0, "incoming": 0, "outgoing": 0,
+                "public": f"{module}::item{index}", "qualifiedName": f"item{index}",
+            })
+        script = r"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const marker = 'window.CPProjectUI = { render: render, teardown: teardown, recolour: recolour };';
+if (!source.includes(marker)) throw new Error('Project UI export marker changed');
+const testExport = `window.CPProjectUI = {
+  __setQuery: function (value) { routeState = { query: value || {} }; },
+  __models: { crate: crateModel, module: moduleModel }
+};`;
+const context = { window: { CONTROL_PLANE_PROJECT: __FIXTURE__, CP_DATA: {} } };
+vm.createContext(context);
+vm.runInContext(source.replace(marker, testExport), context);
+const ui = context.window.CPProjectUI;
+ui.__setQuery({});
+const CRATE = __CRATE__;
+const seen = new Set(), reached = new Set(), levels = [];
+const queue = [{ scope: 'crate' }];
+while (queue.length && levels.length < 400) {
+  const q = queue.shift();
+  const key = q.scope === 'crate' ? '(package)' : q.module;
+  if (seen.has(key)) continue;
+  seen.add(key);
+  const model = q.scope === 'crate' ? ui.__models.crate(CRATE)
+                                    : ui.__models.module(CRATE, q.module);
+  const children = model.nodes.slice(1);
+  levels.push({ level: key, labels: children.map(n => n.label) });
+  children.forEach(function (node) {
+    if (node.data.type === 'file') { reached.add(node.data.file.path); return; }
+    if (node.data.type === 'module') queue.push({ scope: 'module', module: node.data.module });
+  });
+}
+process.stdout.write(JSON.stringify({ levels: levels, reached: [...reached].sort() }));
+""".replace("__FIXTURE__", json.dumps(fixture)).replace("__CRATE__", json.dumps(crate))
+        completed = subprocess.run(
+            ["node", "-e", script, str(self.project_js())],
+            check=True, capture_output=True, text=True,
+        )
+        result = json.loads(completed.stdout)
+        result["byLevel"] = {entry["level"]: entry["labels"] for entry in result["levels"]}
+        return result
+
+    def test_a_package_whose_only_folder_is_src_shows_what_is_inside_src(self) -> None:
+        """`src` is not a choice, so it is not a level. A stray config file beside it is a file,
+        not a fork -- charging a level for it put a click in front of every FSD folder."""
+        walked = self.walk([
+            ("client/vite.config.ts", "(root)"),
+            ("client/src/widgets/chart/index.ts", "src/widgets/chart"),
+            ("client/src/pages/home/index.ts", "src/pages/home"),
+        ], crate="client")
+        self.assertEqual(["pages", "widgets", "vite.config.ts"],
+                         walked["byLevel"]["(package)"])
+
+    def test_a_package_with_src_and_test_keeps_both(self) -> None:
+        """A fork is a real choice; collapsing past it would hide a sibling outright."""
+        walked = self.walk([
+            ("client/src/widgets/chart/index.ts", "src/widgets/chart"),
+            ("client/test/widgets/chart.spec.ts", "test/widgets"),
+        ], crate="client")
+        self.assertEqual(["src", "test"], walked["byLevel"]["(package)"])
+
+    def test_descending_a_module_reaches_its_whole_subtree(self) -> None:
+        """The defect this class exists for: a level that renders one node and hides everything
+        beneath it, while every count elsewhere still looks right."""
+        files = [
+            ("crate/src/shell/state/overlay/modal.rs", "shell::state::overlay"),
+            ("crate/src/shell/state/window.rs", "shell::state"),
+            ("crate/src/shell/chrome.rs", "shell"),
+            ("crate/src/widgets/graph/palette.rs", "widgets::graph"),
+            ("crate/src/lib.rs", "(root)"),
+        ]
+        walked = self.walk(files)
+        self.assertEqual(["shell", "widgets", "lib.rs"], walked["byLevel"]["(package)"])
+        self.assertEqual(["state", "chrome.rs"], walked["byLevel"]["shell"])
+        self.assertEqual(["overlay", "window.rs"], walked["byLevel"]["shell::state"])
+        self.assertEqual([path for path, _ in sorted(files)], walked["reached"],
+                         "every file must be reachable by descending; none may be stranded")
+
+    def test_a_module_file_is_never_shown_beside_its_own_grandchildren(self) -> None:
+        """Letting a file ride along with a collapse is right for a package's build files and
+        wrong below that: `shell/chrome.rs` beside `shell/state/overlay/modal.rs` claims the two
+        are siblings. The package-root exception must not apply at every depth."""
+        walked = self.walk([
+            ("crate/src/shell/state/overlay/modal.rs", "shell::state::overlay"),
+            ("crate/src/shell/state/window.rs", "shell::state"),
+            ("crate/src/shell/chrome.rs", "shell"),
+            # A second top-level folder, so `shell` is a level of its own rather than the package's
+            # single wrapper -- which the package rule would legitimately merge away.
+            ("crate/src/widgets/graph/palette.rs", "widgets::graph"),
+        ])
+        self.assertEqual(["shell", "widgets"], walked["byLevel"]["(package)"])
+        self.assertEqual(["state", "chrome.rs"], walked["byLevel"]["shell"])
+        self.assertNotIn("modal.rs", walked["byLevel"]["shell"])
+        self.assertEqual(["overlay", "window.rs"], walked["byLevel"]["shell::state"])
+
+    def test_no_level_leads_nowhere(self) -> None:
+        """A level with no children is a dead end for whatever sits under it."""
+        walked = self.walk([
+            ("crate/a/b/c/deep.rs", "a::b::c"),
+            ("crate/a/b/other.rs", "a::b"),
+            ("crate/z.rs", "(root)"),
+        ])
+        empty = [entry["level"] for entry in walked["levels"] if not entry["labels"]]
+        self.assertEqual([], empty, f"levels that render nothing: {empty}")
 
 
 class RequiredProjectIntelligenceDocsTests(unittest.TestCase):

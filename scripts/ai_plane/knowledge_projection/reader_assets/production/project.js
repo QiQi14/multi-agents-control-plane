@@ -361,63 +361,149 @@
   }
 
   // Module paths are PATHS, not opaque labels. Listing every distinct one at a crate's level
-  // dumped the whole subtree at once -- a real product rendered ~500 fully-qualified siblings with
-  // nothing to drill into. This shows one level at a time and collapses a chain that has only one
-  // child, so a package whose sole entry is `src/` presents its contents directly instead of
-  // making the reader click through a level that carries no choice.
+  // dumped the whole subtree at once -- real products rendered 222 and ~500 fully-qualified
+  // siblings, with nothing to drill into. Every tier below a package now shows ONE segment and
+  // descends: package -> module -> sub-module -> files. A chain that offers no choice (a package
+  // whose sole entry is `src/`) is collapsed away, and collapsing stops the moment a level holds
+  // a file or a module of its own.
+  //
+  // The route value stays a REAL module path, cut from the original string with its own separators
+  // intact, because governed views and file membership are keyed on it. A label is only the last
+  // segment; the two are not interchangeable.
   var MODULE_SEPARATORS = /::|[./]/;
 
-  function moduleSegments(moduleName, crate) {
+  function moduleSegments(moduleName) {
     var raw = rawModulePath(moduleName);
     if (!raw) return [];
-    var parts = raw.split(MODULE_SEPARATORS).filter(function (p) { return p.length; });
-    // The crate name usually prefixes its own module paths; it is not a level to descend through.
-    var crateParts = String(crate || '').split(MODULE_SEPARATORS).filter(function (p) { return p.length; });
-    var i = 0;
-    while (i < crateParts.length && i < parts.length && parts[i] === crateParts[i]) i++;
-    return parts.slice(i);
+    return raw.split(MODULE_SEPARATORS).filter(function (part) { return part.length; });
   }
 
-  function collapsePassthrough(pathsList) {
-    // Drop leading segments every path agrees on: they offer no navigational choice.
+  function modulePrefix(raw, count) {
+    // The leading `count` segments of `raw`, keeping the source's own separators.
+    var text = String(raw || '');
+    if (count <= 0) return '';
+    var scan = /::|[./]/g;   // built here: a shared /g regex would carry lastIndex between calls
+    var match;
+    var end = 0;
+    var taken = 0;
+    while ((match = scan.exec(text)) !== null) {
+      if (match.index > end) {
+        taken += 1;
+        if (taken === count) return text.slice(0, match.index);
+      }
+      end = match.index + match[0].length;
+    }
+    return text;
+  }
+
+  function moduleShape(moduleName, crate) {
+    // `tail` is the path below the package; `skip` converts a tail depth back to a raw segment
+    // count, since a module path sometimes repeats the package name and that is not a level.
+    var raw = rawModulePath(moduleName);
+    var segments = moduleSegments(moduleName);
+    var crateParts = String(crate || '').split(MODULE_SEPARATORS)
+      .filter(function (part) { return part.length; });
+    var skip = 0;
+    while (skip < crateParts.length && skip < segments.length &&
+           segments[skip] === crateParts[skip]) skip += 1;
+    return { raw: raw, skip: skip, tail: segments.slice(skip) };
+  }
+
+  function underPrefix(tail, prefixTail) {
+    if (tail.length < prefixTail.length) return false;
+    for (var i = 0; i < prefixTail.length; i += 1) {
+      if (tail[i] !== prefixTail[i]) return false;
+    }
+    return true;
+  }
+
+  function collapsePassthrough(pathsList, packageLevel) {
+    // Collapse while a level offers no CHOICE of where to descend.
     var depth = 0;
     for (;;) {
       var candidate = null;
+      var deeper = 0;
       for (var i = 0; i < pathsList.length; i++) {
         var segs = pathsList[i];
-        if (segs.length <= depth + 1) return depth;   // something terminates here; stop collapsing
+        if (segs.length <= depth) {
+          // A file of this level's own. Collapsing past it would print it beside its own
+          // grandchildren, claiming it lives somewhere it does not -- so it stops the collapse.
+          // The one exception is a PACKAGE's root files: `vite.config.ts`, `package.json` and
+          // their kind sit outside the module tree, and letting them block cost a click in front
+          // of every folder the product actually has.
+          if (depth > 0 || !packageLevel) return depth;
+          continue;
+        }
+        deeper += 1;
         if (candidate === null) candidate = segs[depth];
-        else if (segs[depth] !== candidate) return depth;
+        else if (segs[depth] !== candidate) return depth;   // a fork: a real choice
       }
-      if (candidate === null) return depth;
+      if (!deeper) return depth;                      // nothing deeper to collapse into
       depth++;
     }
+  }
+
+  function levelTails(context, prefixTail) {
+    // Every path a level has to choose between, expressed relative to that level.
+    var tails = [];
+    P.files.forEach(function (file) {
+      if (file.crate !== context.rust) return;
+      var tail = moduleShape(file.module || '(root)', context.rust).tail;
+      if (!prefixTail.length) { tails.push(tail); return; }
+      if (underPrefix(tail, prefixTail)) tails.push(tail.slice(prefixTail.length));
+    });
+    return tails;
+  }
+
+  function moduleTrail(context, moduleName) {
+    // Walk DOWN from the package the way the reader descended, so every step is a level that
+    // really exists. Deriving the parent by lopping off one segment instead would land on a
+    // collapsed pass-through, whose level then collapses straight back and makes "up" a no-op.
+    var shape = moduleShape(moduleName, context.rust);
+    if (!shape.tail.length) return [];
+    var trail = [];
+    var depth = 0;
+    while (depth < shape.tail.length) {
+      depth += collapsePassthrough(levelTails(context, shape.tail.slice(0, depth)),
+                                   depth === 0) + 1;
+      if (depth > shape.tail.length) depth = shape.tail.length;   // hand-edited route: land on it
+      trail.push({
+        route: modulePrefix(shape.raw, shape.skip + depth),
+        label: shape.tail[depth - 1]
+      });
+    }
+    return trail;
   }
 
   function crateModel(crate) {
     var context = crateRouteContext(crate);
     var view = crateView(context);
+    var collapsed = collapsePassthrough(levelTails(context, []), true);
+    // A package level is the module level with an empty prefix: sub-modules one segment down, plus
+    // the package's own files. Bucketing the latter behind a single `(root)` node made every
+    // flat package -- which is every package a directory-per-package indexer produces -- cost one
+    // click that led to exactly one node. Driving both off P.files also keeps a file that declares
+    // no symbols reachable; a node-driven bucketing dropped it entirely.
     var modules = {};
-    var owned = P.nodes.filter(function (node) { return node.crate === context.rust; });
-    var segmentsFor = {};
-    owned.forEach(function (node) {
-      segmentsFor[node.module || '(root)'] = moduleSegments(node.module || '(root)', context.rust);
-    });
-    var collapsed = collapsePassthrough(Object.keys(segmentsFor).map(function (k) {
-      return segmentsFor[k];
-    }));
-    owned.forEach(function (node) {
-      var full = node.module || '(root)';
-      var segs = segmentsFor[full];
-      // One level below the collapsed depth; anything terminating at that depth is this level's own.
-      var moduleName = segs.length > collapsed ? segs[collapsed] : '(root)';
-      var id = 'module:' + context.route + '|' + moduleName;
+    var ownFiles = [];
+    var ownerOf = {};
+    P.files.forEach(function (file) {
+      if (file.crate !== context.rust) return;
+      var shape = moduleShape(file.module || '(root)', context.rust);
+      if (shape.tail.length <= collapsed) {
+        ownFiles.push(file);
+        ownerOf[file.path] = 'file:' + file.path;
+        return;
+      }
+      var route = modulePrefix(shape.raw, shape.skip + collapsed + 1);
+      var id = 'module:' + context.route + '|' + route;
       var bucket = modules[id] || (modules[id] = {
-        id: id, module: moduleName, nodes: 0, files: {}, pending: 0
+        id: id, module: route, label: shape.tail[collapsed], nodes: 0, files: {}, pending: 0
       });
-      bucket.nodes += 1;
-      bucket.files[node.path] = true;
-      bucket.pending += node.pending;
+      bucket.nodes += file.nodes;
+      bucket.files[file.path] = true;
+      bucket.pending += file.pending;
+      ownerOf[file.path] = id;
     });
     var rootId = 'crate:' + context.route;
     var rootIdentity = context.packageId == null ? null : 'crate:' + context.packageId;
@@ -436,7 +522,8 @@
         type: 'crate', crate: context.route, cluster: context.cluster,
         governedViewNode: rootViewNode
       },
-      Object.keys(modules).reduce(function (sum, key) { return sum + modules[key].nodes; }, 0))];
+      Object.keys(modules).reduce(function (sum, key) { return sum + modules[key].nodes; },
+        ownFiles.reduce(function (sum, file) { return sum + file.nodes; }, 0)))];
     var itemMap = {};
     Object.keys(modules).sort().forEach(function (id) {
       var item = modules[id];
@@ -449,11 +536,23 @@
         [{ package_id: context.packageId, unit_name: context.rust }]
       );
       itemMap[id] = true;
-      nodes.push(graphNode(id, item.module, 'module',
+      nodes.push(graphNode(id, item.label, 'module',
         presentationGroupKey(viewNode, governedIdentity), {
         type: 'module', crate: context.route, module: item.module, summary: item,
         governedViewNode: viewNode
       }, item.nodes));
+    });
+    ownFiles.forEach(function (file) {
+      var id = 'file:' + file.path;
+      var viewNode = findVisibleNode(
+        view, id, file.path,
+        [{ unit_name: context.rust, module_path: rawModulePath(file.module) }]
+      );
+      itemMap[id] = true;
+      nodes.push(graphNode(id, file.name, 'file',
+        presentationGroupKey(viewNode, id), {
+        type: 'file', file: file, governedViewNode: viewNode
+      }, file.nodes));
     });
     var edges;
     if (mode() === 'hierarchy') {
@@ -463,8 +562,11 @@
       });
     } else {
       edges = aggregateEdges(itemMap, function (id) {
+        // Through the SAME bucketing the nodes were built with. Keying on the full module path
+        // here matched no bucket, so every relation mode silently rendered an edgeless level.
         if (nodeCrate[id] !== context.rust) return '';
-        return 'module:' + context.route + '|' + (nodeModule[id] || '(root)');
+        var node = nodeById[id];
+        return node ? (ownerOf[node.path] || '') : '';
       });
     }
     return { nodes: nodes, edges: edges,
@@ -475,25 +577,82 @@
     var context = crateRouteContext(crate);
     var view = moduleView(context, moduleName);
     var rawModule = rawModulePath(moduleName);
-    var files = P.files.filter(function (file) {
-      return file.crate === context.rust && rawModulePath(file.module) === rawModule;
+    var prefix = moduleShape(moduleName, context.rust);
+    // An empty prefix is the package ROOT -- everything above the package's first real branch.
+    // Read as a plain prefix it would match every file in the package, the opposite of what it
+    // means; measured with a different depth than the crate level used, it would strand whatever
+    // the two disagreed about. Both take the depth from the same place.
+    var rootDepth = collapsePassthrough(levelTails(context, []), true);
+    var isRoot = !prefix.tail.length;
+    var members = [];
+    P.files.forEach(function (file) {
+      if (file.crate !== context.rust) return;
+      var shape = moduleShape(file.module || '(root)', context.rust);
+      if (isRoot ? shape.tail.length > rootDepth : !underPrefix(shape.tail, prefix.tail)) return;
+      members.push({ file: file, shape: shape });
+    });
+    var collapsed = isRoot ? rootDepth : collapsePassthrough(members.map(function (entry) {
+      return entry.shape.tail.slice(prefix.tail.length);
+    }), false);
+    var groups = {};
+    var ownFiles = [];
+    var ownerOf = {};
+    members.forEach(function (entry) {
+      var relative = entry.shape.tail.slice(prefix.tail.length);
+      if (relative.length <= collapsed) {
+        ownFiles.push(entry.file);
+        ownerOf[entry.file.path] = 'file:' + entry.file.path;
+        return;
+      }
+      var route = modulePrefix(
+        entry.shape.raw, entry.shape.skip + prefix.tail.length + collapsed + 1);
+      var id = 'module:' + context.route + '|' + route;
+      var bucket = groups[id] || (groups[id] = {
+        id: id, module: route, label: relative[collapsed], nodes: 0, files: {}, pending: 0
+      });
+      bucket.nodes += entry.file.nodes;
+      bucket.files[entry.file.path] = true;
+      bucket.pending += entry.file.pending;
+      ownerOf[entry.file.path] = id;
     });
     var rootId = 'module:' + context.route + '|' + moduleName;
     var rootIdentity = 'module:' + context.rust + ':' + rawModule;
     var rootViewNode = findVisibleNode(
       view, rootIdentity, rawModule, [{ unit_name: context.rust }]
     );
-    var nodes = [graphNode(rootId, moduleName, 'module',
+    var nodes = [graphNode(rootId,
+      isRoot ? '(root)' : prefix.tail[prefix.tail.length - 1], 'module',
       presentationGroupKey(rootViewNode, rootIdentity), {
       type: 'module', crate: context.route, module: moduleName,
+      summary: {
+        files: members.reduce(function (map, entry) {
+          map[entry.file.path] = true; return map;
+        }, {}),
+        nodes: members.reduce(function (sum, entry) { return sum + entry.file.nodes; }, 0),
+        pending: members.reduce(function (sum, entry) { return sum + entry.file.pending; }, 0)
+      },
       governedViewNode: rootViewNode
-    }, files.reduce(function (sum, file) { return sum + file.nodes; }, 0))];
+    }, members.reduce(function (sum, entry) { return sum + entry.file.nodes; }, 0))];
     var itemMap = {};
-    files.forEach(function (file) {
+    Object.keys(groups).sort().forEach(function (id) {
+      var item = groups[id];
+      var governedIdentity = 'module:' + context.rust + ':' + item.module;
+      var viewNode = findVisibleNode(
+        view, governedIdentity, item.module,
+        [{ unit_name: context.rust, module_path: item.module }]
+      );
+      itemMap[id] = true;
+      nodes.push(graphNode(id, item.label, 'module',
+        presentationGroupKey(viewNode, governedIdentity), {
+        type: 'module', crate: context.route, module: item.module, summary: item,
+        governedViewNode: viewNode
+      }, item.nodes));
+    });
+    ownFiles.forEach(function (file) {
       var id = 'file:' + file.path;
       var viewNode = findVisibleNode(
         view, id, file.path,
-        [{ unit_name: context.rust, module_path: rawModule }]
+        [{ unit_name: context.rust, module_path: rawModulePath(file.module) }]
       );
       itemMap[id] = true;
       nodes.push(graphNode(id, file.name, 'file',
@@ -510,7 +669,7 @@
     } else {
       edges = aggregateEdges(itemMap, function (id) {
         var node = nodeById[id];
-        return node && itemMap['file:' + node.path] ? 'file:' + node.path : '';
+        return node ? (ownerOf[node.path] || '') : '';
       });
     }
     return { nodes: nodes, edges: edges,
@@ -879,9 +1038,15 @@
     if (scope() === 'module' || scope() === 'file') {
       var file = scope() === 'file' ? fileByPath[query().file] : null;
       var moduleName = query().module || (file && (file.module || '(root)')) || '';
-      parts.push('<span>/</span><button type="button" data-scope="module" data-crate="' +
-        esc(query().crate || (file && file.crate) || '') + '" data-module="' +
-        esc(moduleName) + '">' + esc(moduleName) + '</button>');
+      var crateValue = query().crate || (file && file.crate) || '';
+      // One button per level actually descended through, so a deep module stays reversible.
+      var steps = moduleTrail(crateRouteContext(crateValue), moduleName);
+      if (!steps.length) steps = [{ route: moduleName, label: moduleName }];
+      steps.forEach(function (step) {
+        parts.push('<span>/</span><button type="button" data-scope="module" data-crate="' +
+          esc(crateValue) + '" data-module="' + esc(step.route) + '">' +
+          esc(step.label) + '</button>');
+      });
     }
     if (scope() === 'file') {
       parts.push('<span>/</span><strong>' + esc((fileByPath[query().file] || {}).name || '') + '</strong>');
@@ -895,15 +1060,24 @@
     var currentCrate = query().crate || (file && file.crate) || '';
     var currentModule = query().module || (file && (file.module || '(root)')) || '';
     var up = '';
+    var trail = currentScope === 'module' || currentScope === 'file'
+      ? moduleTrail(crateRouteContext(currentCrate), currentModule) : [];
     if (currentScope === 'crate') {
       up = '<button class="project-up" type="button" data-scope="workspace">← All packages</button>';
     } else if (currentScope === 'module') {
-      up = '<button class="project-up" type="button" data-scope="crate" data-crate="' +
-        esc(currentCrate) + '">← Up to ' + esc(currentCrate) + '</button>';
+      // Up one LEVEL, not one segment: a segment step can land on a collapsed pass-through, which
+      // renders the identical level again and makes the button look broken.
+      var parent = trail.length > 1 ? trail[trail.length - 2] : null;
+      up = parent
+        ? '<button class="project-up" type="button" data-scope="module" data-crate="' +
+          esc(currentCrate) + '" data-module="' + esc(parent.route) + '">← Up to ' +
+          esc(parent.label) + '</button>'
+        : '<button class="project-up" type="button" data-scope="crate" data-crate="' +
+          esc(currentCrate) + '">← Up to ' + esc(currentCrate) + '</button>';
     } else if (currentScope === 'file') {
       up = '<button class="project-up" type="button" data-scope="module" data-crate="' +
         esc(currentCrate) + '" data-module="' + esc(currentModule) + '">← Up to ' +
-        esc(currentModule) + '</button>';
+        esc(trail.length ? trail[trail.length - 1].label : currentModule) + '</button>';
     } else {
       up = '<span class="project-up disabled">Top level</span>';
     }
@@ -1074,13 +1248,17 @@
       subtitle = node.data.crate + ' · module';
       var summary = node.data.summary || {};
       var moduleSummary = authoredModuleSummary(node.data.crate, node.data.module, summary);
-      primary = purposeBlock('Module summary', moduleSummary,
+      // The heading is one segment, so the full path has to be shown: a bare leaf name does not
+      // say which one it is.
+      primary = '<p class="identity-path">' + esc(node.data.module) + '</p>' +
+        purposeBlock('Module summary', moduleSummary,
         'No authored module summary was exported; counts below are index facts only.') + '<dl class="project-facts"><dt>Files</dt><dd>' +
         Object.keys(summary.files || {}).length + '</dd><dt>Symbols</dt><dd>' +
         (summary.nodes || node.amount).toLocaleString() + '</dd><dt>Pending</dt><dd>' +
         (summary.pending || 0).toLocaleString() + '</dd></dl>';
       actions = '<button class="btn primary" type="button" data-expand-module="' +
-        esc(node.data.module) + '" data-crate="' + esc(node.data.crate) + '">Expand files</button>';
+        esc(node.data.module) + '" data-crate="' + esc(node.data.crate) +
+        '">Expand contents</button>';
     } else if (type === 'file') {
       file = node.data.file;
       title = file.name;

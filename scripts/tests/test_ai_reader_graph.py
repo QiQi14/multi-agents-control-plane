@@ -398,19 +398,22 @@ class LayoutSettlingTests(unittest.TestCase):
 class ProgressiveDrilldownTests(unittest.TestCase):
     """A package must reveal ONE level at a time.
 
-    Listing every distinct module path at a package's level dumped the whole subtree: a real
-    TypeScript product rendered ~500 fully-qualified siblings, and this repository's own editor
-    crate rendered 222. Both were unnavigable while every count looked correct.
+    Listing every distinct module path at a package's level dumped the whole subtree: real
+    products rendered ~500 and 222 fully-qualified siblings. Both were unnavigable while every
+    count looked correct.
     """
 
     def project_js(self) -> str:
         return (READER / "project.js").read_text(encoding="utf-8")
 
-    def test_the_crate_level_buckets_by_one_segment_not_the_whole_path(self) -> None:
+    def test_the_package_level_shows_one_segment_and_routes_by_the_path(self) -> None:
+        """The label is a segment; the route is the path. Emitting the segment as the route is
+        what made the next level unable to find anything."""
         source = self.project_js()
-        self.assertIn("moduleSegments", source)
-        self.assertIn("segs.length > collapsed ? segs[collapsed] : '(root)'", source,
-                      "the bucket key must be a single segment at the current depth")
+        self.assertIn("var route = modulePrefix(shape.raw, shape.skip + collapsed + 1);", source,
+                      "the package level must route by a real module path")
+        self.assertIn("label: shape.tail[collapsed], nodes: 0, files: {}, pending: 0", source,
+                      "the label must be the single segment at the current depth")
         self.assertNotIn("var moduleName = node.module || '(root)';\n      var id = 'module:'",
                          source, "bucketing on the full module path is the flat dump")
 
@@ -418,17 +421,120 @@ class ProgressiveDrilldownTests(unittest.TestCase):
         """A package whose only entry is `src/` must show `src`'s contents, not `src` itself:
         a level with one choice is not a choice."""
         source = self.project_js()
-        # Assert the CALL, not the name: a substring check also matches a renamed definition and
-        # would stay green while the call site threw.
-        self.assertIn("var collapsed = collapsePassthrough(", source)
-        self.assertIn("function collapsePassthrough(pathsList) {", source)
+        # Assert each CALL, not the name: a substring check also matches a renamed definition, and
+        # one shared assertion stays green while the other call site is broken.
+        self.assertIn("var collapsed = collapsePassthrough(levelTails(context, []), true);", source)
+        self.assertIn("var rootDepth = collapsePassthrough(levelTails(context, []), true);", source)
+        self.assertIn("var collapsed = isRoot ? rootDepth : collapsePassthrough(members.map(",
+                      source)
+        self.assertIn("function collapsePassthrough(pathsList, packageLevel) {", source)
 
     def test_collapsing_stops_where_a_real_choice_appears(self) -> None:
         """`src` plus `test` must both stay visible; collapsing past a fork would hide a sibling."""
         source = self.project_js()
         self.assertIn("if (segs[depth] !== candidate) return depth;", source)
-        self.assertIn("if (segs.length <= depth + 1) return depth;", source)
+        self.assertIn("if (!deeper) return depth;", source)
+
+    def test_a_package_root_file_does_not_cost_a_navigation_level(self) -> None:
+        """A build file at a package's root is not a CHOICE of where to descend. Counting it as a
+        fork put one stray `vite.config.ts` in front of every folder the product has."""
+        source = self.project_js()
+        self.assertIn("          if (depth > 0 || !packageLevel) return depth;\n"
+                      "          continue;", source,
+                      "a package's root files ride along; anything deeper stops the collapse")
+        self.assertNotIn("if (segs.length <= depth + 1) return depth;", source,
+                         "stopping at any terminator is what charged a level for a stray file")
+
+    def test_the_root_file_exception_is_confined_to_the_package_level(self) -> None:
+        """Applied at every depth it flattened a single-child module chain, printing a file beside
+        its own grandchildren -- the levels below a package must stop at their own files."""
+        source = self.project_js()
+        self.assertIn("collapsePassthrough(members.map(function (entry) {\n"
+                      "      return entry.shape.tail.slice(prefix.tail.length);\n"
+                      "    }), false);", source,
+                      "a module level must not claim the package-root exception")
+        self.assertIn("depth === 0) + 1;", source,
+                      "the trail walk must apply the exception only to the package level")
+
+    def test_the_package_level_shows_its_own_files_rather_than_a_root_bucket(self) -> None:
+        """Every package a directory-per-package indexer produces is flat, so a `(root)` bucket
+        was one click that led to exactly one node."""
+        source = self.project_js()
+        self.assertIn("        ownFiles.push(file);\n"
+                      "        ownerOf[file.path] = 'file:' + file.path;\n"
+                      "        return;", source)
+        self.assertNotIn("label: deeper ? shape.tail[collapsed] : '(root)'", source)
+
+    def test_levels_are_driven_by_files_so_a_symbolless_file_stays_reachable(self) -> None:
+        """Bucketing the package level from P.nodes dropped any file that declares no symbol, and
+        measured the collapse against a different set than the level below it used."""
+        source = self.project_js()
+        self.assertIn("      bucket.nodes += file.nodes;", source)
+        self.assertNotIn("var owned = P.nodes.filter(function (node) "
+                         "{ return node.crate === context.rust; });", source)
 
     def test_separators_from_every_indexed_language_are_handled(self) -> None:
         """Rust writes `a::b`, Python and TypeScript write `a.b`, paths write `a/b`."""
         self.assertIn("/::|[./]/", self.project_js())
+
+    def test_a_module_level_owns_its_whole_subtree(self) -> None:
+        """Selecting a level's files by whole-path equality is a DEAD END once labels are
+        segments: a branch name matched no file and rendered a single node while the 113 files
+        beneath it were unreachable. Membership is a prefix relation, not equality."""
+        source = self.project_js()
+        self.assertNotIn("rawModulePath(file.module) === rawModule", source,
+                         "whole-path equality drops every descendant of the selected module")
+        self.assertIn("!underPrefix(shape.tail, prefix.tail)", source,
+                      "a module level must take everything beneath its prefix")
+
+    def test_a_module_level_offers_sub_modules_as_well_as_files(self) -> None:
+        """Descent has to continue: a level that can only end in files cannot reach depth 3."""
+        source = self.project_js()
+        self.assertIn(
+            "var route = modulePrefix(\n"
+            "        entry.shape.raw, entry.shape.skip + prefix.tail.length + collapsed + 1);",
+            source, "a module level must emit deeper module routes, not only files")
+
+    def test_the_package_root_is_not_read_as_a_wildcard(self) -> None:
+        """An empty prefix is a prefix of everything. Treated as one, `(root)` would swallow the
+        entire package instead of the files above its first real branch."""
+        source = self.project_js()
+        self.assertIn("var isRoot = !prefix.tail.length;", source)
+        self.assertIn("if (isRoot ? shape.tail.length > rootDepth : !underPrefix(", source)
+
+    def test_the_root_route_and_the_package_level_measure_depth_the_same_way(self) -> None:
+        """Two depths would strand whatever they disagreed about: a file the package level counts
+        as its own but the `(root)` route then refuses to list is unreachable."""
+        source = self.project_js()
+        self.assertEqual(2, source.count("collapsePassthrough(levelTails(context, []), true)"),
+                         "the package level and the (root) route take one depth from one place")
+
+    def test_level_edges_aggregate_through_the_same_buckets(self) -> None:
+        """The relation modes key on the SAME grouping the nodes were built with. Keying on the
+        full module path matched no bucket, so every non-hierarchy mode drew an edgeless level."""
+        source = self.project_js()
+        self.assertNotIn("return 'module:' + context.route + '|' + (nodeModule[id] || '(root)');",
+                         source, "the full module path is no longer a bucket key")
+        self.assertEqual(2, source.count("return node ? (ownerOf[node.path] || '') : '';"),
+                         "both levels aggregate through the map their own nodes were built from")
+
+    def test_up_navigation_climbs_one_level_not_one_segment(self) -> None:
+        """Dropping a single segment can land on a collapsed pass-through, whose level collapses
+        straight back to where it started -- the button then looks broken."""
+        source = self.project_js()
+        self.assertIn("var trail = currentScope === 'module' || currentScope === 'file'\n"
+                      "      ? moduleTrail(crateRouteContext(currentCrate), currentModule) : [];",
+                      source)
+        self.assertIn("var parent = trail.length > 1 ? trail[trail.length - 2] : null;", source)
+
+    def test_the_breadcrumb_names_every_level_descended_through(self) -> None:
+        source = self.project_js()
+        self.assertIn("var steps = moduleTrail(crateRouteContext(crateValue), moduleName);", source)
+        self.assertIn("function moduleTrail(context, moduleName) {", source)
+
+    def test_the_segment_scan_cannot_leak_state_between_calls(self) -> None:
+        """A shared /g regex keeps lastIndex, so the second caller starts mid-string and cuts the
+        route in the wrong place."""
+        source = self.project_js()
+        self.assertIn("var scan = /::|[./]/g;", source)
+        self.assertNotIn("MODULE_SEPARATORS.exec(", source)
